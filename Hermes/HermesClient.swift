@@ -68,14 +68,25 @@ struct HermesClient {
     }
 
     func sessionMessages(_ id: String) async throws -> [RemoteMessage] {
+        try await sessionMessagePage(id).data
+    }
+
+    func sessionMessagePage(_ id: String, offset: Int = 0) async throws -> RemoteMessagesResponse {
         var components = URLComponents(url: try endpoint("api", "sessions", id, "messages"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "order", value: "latest"),
             URLQueryItem(name: "limit", value: "100"),
+            URLQueryItem(name: "offset", value: String(offset)),
+            URLQueryItem(name: "include_compacted", value: "true"),
             URLQueryItem(name: "inline_images", value: "false")
         ]
-        let response: RemoteMessagesResponse = try await request(RemoteMessagesResponse.self, url: components.url!)
-        return response.data
+        return try await request(RemoteMessagesResponse.self, url: components.url!)
+    }
+
+    func createSession(title: String) async throws -> RemoteSession {
+        let response = try await request(RemoteSessionResponse.self, url: endpoint("api", "sessions"),
+                                         method: "POST", body: ["title": title])
+        return response.session
     }
 
     func renameSession(_ id: String, title: String) async throws -> RemoteSession {
@@ -121,6 +132,80 @@ struct HermesClient {
             method: "POST"
         )
         return response.job
+    }
+
+    func updateJob(_ id: String, fields: [String: String]) async throws -> RemoteJob {
+        let response = try await request(RemoteJobResponse.self, url: endpoint("api", "jobs", id),
+                                         method: "PATCH", body: fields)
+        return response.job
+    }
+
+    func deleteJob(_ id: String) async throws {
+        let response = try await request(JobDeleteResponse.self, url: endpoint("api", "jobs", id), method: "DELETE")
+        guard response.ok else { throw ClientError.invalidResponse }
+    }
+
+    func stopRun(_ id: String) async throws {
+        _ = try await request(RunStopResponse.self, url: endpoint("v1", "runs", id, "stop"), method: "POST")
+    }
+
+    func resolveApproval(_ approval: RemoteApproval, choice: String) async throws {
+        var body = ["choice": choice]
+        if let requestID = approval.requestID { body["request_id"] = requestID }
+        let response = try await request(ApprovalResponse.self,
+            url: endpoint("v1", "runs", approval.runID, "approval"), method: "POST", body: body)
+        guard response.resolved > 0 else { throw ClientError.invalidResponse }
+    }
+
+    func streamSession(_ id: String, input: String, onEvent: (SessionStreamEvent) async -> Void) async throws -> SessionStreamResult {
+        var urlRequest = authorizedRequest(url: try endpoint("api", "sessions", id, "chat", "stream"))
+        urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = 600
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        // The server owns this transcript and its configured model; send only the new turn.
+        urlRequest.httpBody = try JSONEncoder().encode(["input": input])
+        let configuration = sessionConfiguration.copy() as! URLSessionConfiguration
+        configuration.timeoutIntervalForRequest = 600
+        configuration.timeoutIntervalForResource = 3600
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let (bytes, response) = try await session.bytes(for: urlRequest)
+        guard let response = response as? HTTPURLResponse else { throw ClientError.invalidResponse }
+        guard (200..<300).contains(response.statusCode) else {
+            var body = Data()
+            for try await byte in bytes {
+                body.append(byte)
+                if body.count >= 300 { break }
+            }
+            throw ClientError.server(response.statusCode, String(decoding: body, as: UTF8.self))
+        }
+        var parser = SSEParser()
+        var decoder = SessionStreamDecoder(sessionID: id)
+        var lineBytes: [UInt8] = []
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            guard byte == 10 else {
+                lineBytes.append(byte)
+                if lineBytes.count > 1_000_000 { throw ClientError.invalidStream }
+                continue
+            }
+            if lineBytes.last == 13 { lineBytes.removeLast() }
+            let line = String(decoding: lineBytes, as: UTF8.self)
+            lineBytes.removeAll(keepingCapacity: true)
+            if let frame = parser.consume(line) {
+                for event in try decoder.consume(frame) { await onEvent(event) }
+                if let result = decoder.result { return result }
+            }
+        }
+        if !lineBytes.isEmpty {
+            _ = parser.consume(String(decoding: lineBytes, as: UTF8.self))
+        }
+        if let frame = parser.flush() {
+            for event in try decoder.consume(frame) { await onEvent(event) }
+        }
+        guard let result = decoder.result else { throw ClientError.incompleteStream }
+        return result
     }
 
     func runJob(_ id: String) async throws {
@@ -258,6 +343,10 @@ private struct ModelsResponse: Decodable {
     let data: [Model]
 }
 
+private struct JobDeleteResponse: Decodable { let ok: Bool }
+private struct RunStopResponse: Decodable { let status: String }
+private struct ApprovalResponse: Decodable { let resolved: Int }
+
 private struct CompletionRequest: Encodable {
     let model: String
     let messages: [CompletionMessage]
@@ -338,6 +427,8 @@ enum ClientError: LocalizedError {
     case incompleteStream
     case invalidStream
     case streamFailed(String)
+    case sessionFailed(String)
+    case sessionCancelled
     case server(Int, String)
 
     var errorDescription: String? {
@@ -349,6 +440,8 @@ enum ClientError: LocalizedError {
         case .incompleteStream: "连接在回复完成前中断，请重试。"
         case .invalidStream: "Hermes 返回的流式数据过大或无效。"
         case .streamFailed(let reason): "Hermes 未完成回复（\(reason)），请重试。"
+        case .sessionFailed(let reason): "服务端回复未完成：\(reason)。请刷新会话确认记录。"
+        case .sessionCancelled: "服务端已停止本次回复。"
         case .server(let code, let message): "服务错误 \(code)：\(message)"
         }
     }

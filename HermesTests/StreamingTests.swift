@@ -168,6 +168,97 @@ final class StreamingTests: XCTestCase {
         XCTAssertEqual(json["deliver"], "local")
     }
 
+    func testSessionStreamUsesServerHistoryAndFinalAnswer() async throws {
+        MockURLProtocol.chunks = [
+            ": keepalive\n\n",
+            "event: run.started\ndata: {\"run_id\":\"run_1\",\"session_id\":\"api_123\"}\n\n",
+            "event: assistant.delta\ndata: {\"delta\":\"正在分析\"}\n\n",
+            "event: assistant.commentary\ndata: {\"text\":\"检查项目\",\"already_streamed\":false}\n\n",
+            "event: tool.started\ndata: {\"tool_name\":\"terminal\"}\n\n",
+            "event: approval.request\ndata: {\"run_id\":\"run_1\",\"request_id\":\"approve_1\",\"command\":\"example\",\"choices\":[\"once\",\"deny\"]}\n\n",
+            "event: assistant.completed\ndata: {\"content\":\"最终回答\",\"session_id\":\"api_compacted\"}\n\n",
+            "event: run.completed\ndata: {\"session_id\":\"api_compacted\",\"completed\":true,\"partial\":false}\n\n"
+        ]
+        var startedID: String?
+        var approvalID: String?
+        var streamed = ""
+        let result = try await makeClient().streamSession("api_123", input: "继续") { event in
+            switch event {
+            case .started(let id): startedID = id
+            case .delta(let delta): streamed += delta
+            case .approval(let approval): approvalID = approval.requestID
+            default: break
+            }
+        }
+        XCTAssertEqual(result.content, "最终回答")
+        XCTAssertEqual(result.sessionID, "api_compacted")
+        XCTAssertEqual(streamed, "正在分析")
+        XCTAssertEqual(startedID, "run_1")
+        XCTAssertEqual(approvalID, "approve_1")
+        XCTAssertEqual(MockURLProtocol.lastRequest?.url?.path, "/api/sessions/api_123/chat/stream")
+        let body = try XCTUnwrap(MockURLProtocol.body)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        XCTAssertEqual(json, ["input": "继续"])
+    }
+
+    func testSessionStreamRejectsPartialAndMissingTerminalStatus() throws {
+        var decoder = SessionStreamDecoder(sessionID: "api_123")
+        _ = try decoder.consume(SSEFrame(event: "assistant.completed", data: #"{"content":"未完成的答案"}"#))
+        XCTAssertThrowsError(try decoder.consume(SSEFrame(event: "run.completed", data: #"{"completed":false,"partial":true,"turn_exit_reason":"iteration_limit"}"#)))
+        XCTAssertNil(decoder.result)
+        var disconnected = SessionStreamDecoder(sessionID: "api_123")
+        _ = try disconnected.consume(SSEFrame(event: "assistant.delta", data: #"{"delta":"部分内容"}"#))
+        XCTAssertThrowsError(try disconnected.consume(SSEFrame(event: "done", data: "{}")))
+    }
+
+    @MainActor
+    func testOlderMessagesArePrependedWithoutDuplicates() async throws {
+        let session = try JSONDecoder().decode(RemoteSession.self, from: Data(#"{"id":"api_123"}"#.utf8))
+        let model = RemoteConversationModel(session: session, client: makeClient())
+        MockURLProtocol.responseData = Data("""
+        {"session_id":"api_123","data":[{"id":3,"role":"user","content":"较新"},{"id":4,"role":"assistant","content":"最新"}],"pagination":{"limit":2,"offset":0,"returned":2}}
+        """.utf8)
+        await model.reload()
+        XCTAssertTrue(model.hasOlderMessages)
+        MockURLProtocol.responseData = Data("""
+        {"session_id":"api_123","data":[{"id":2,"role":"user","content":"更早"},{"id":3,"role":"user","content":"较新"}],"pagination":{"limit":2,"offset":2,"returned":2}}
+        """.utf8)
+        await model.loadOlder()
+        XCTAssertEqual(model.messages.map(\.id), ["2", "3", "4"])
+        let query = URLComponents(url: try XCTUnwrap(MockURLProtocol.lastRequest?.url), resolvingAgainstBaseURL: false)?.queryItems
+        XCTAssertEqual(query?.first(where: { $0.name == "offset" })?.value, "2")
+        XCTAssertEqual(query?.first(where: { $0.name == "include_compacted" })?.value, "true")
+    }
+
+    func testJobEditingPreservesScheduleAndOtherFields() async throws {
+        MockURLProtocol.responseData = Data("""
+        {"job":{"id":"abcdef123456","name":"改名后","schedule":{"kind":"once","run_at":"2030-01-01T09:00:00+08:00"},"schedule_display":"once at 2030-01-01 09:00","enabled":false,"state":"paused"}}
+        """.utf8)
+        let client = makeClient()
+        let updated = try await client.updateJob("abcdef123456", fields: ["name": "改名后"])
+        XCTAssertEqual(updated.editableSchedule, "2030-01-01T09:00:00+08:00")
+        XCTAssertTrue(updated.isPaused)
+        let body = try XCTUnwrap(MockURLProtocol.body)
+        XCTAssertEqual(try JSONDecoder().decode([String: String].self, from: body), ["name": "改名后"])
+        XCTAssertEqual(MockURLProtocol.lastRequest?.httpMethod, "PATCH")
+        MockURLProtocol.responseData = Data(#"{"ok":true}"#.utf8)
+        try await client.deleteJob("abcdef123456")
+        XCTAssertEqual(MockURLProtocol.lastRequest?.httpMethod, "DELETE")
+    }
+
+    func testApprovalAndStopTargetTheExactRun() async throws {
+        let approval = try JSONDecoder().decode(RemoteApproval.self, from: Data(#"{"run_id":"run_1","request_id":"approval_2","choices":["once","deny"]}"#.utf8))
+        MockURLProtocol.responseData = Data(#"{"resolved":1}"#.utf8)
+        let client = makeClient()
+        try await client.resolveApproval(approval, choice: "deny")
+        let body = try XCTUnwrap(MockURLProtocol.body)
+        XCTAssertEqual(try JSONDecoder().decode([String: String].self, from: body), ["choice": "deny", "request_id": "approval_2"])
+        XCTAssertEqual(MockURLProtocol.lastRequest?.url?.path, "/v1/runs/run_1/approval")
+        MockURLProtocol.responseData = Data(#"{"status":"stopping"}"#.utf8)
+        try await client.stopRun("run_1")
+        XCTAssertEqual(MockURLProtocol.lastRequest?.url?.path, "/v1/runs/run_1/stop")
+    }
+
     private func makeClient() -> HermesClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]

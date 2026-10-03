@@ -14,6 +14,13 @@ struct RemoteWorkspaceView: View {
     @State private var loadGeneration = 0
     @State private var errorMessage: String?
     @State private var jobToRun: RemoteJob?
+    @State private var jobToDelete: RemoteJob?
+    @State private var editingJob: RemoteJob?
+    @State private var creatingSession = false
+    @State private var newSessionTitle = ""
+    @State private var sessionBusy = false
+    @State private var createdSession: RemoteSession?
+    @State private var showingCreatedSession = false
 
     private var client: HermesClient { HermesClient(settings: model.settings) }
 
@@ -48,19 +55,31 @@ struct RemoteWorkspaceView: View {
                     .disabled(loading || !model.settings.isConfigured)
                     .accessibilityLabel("刷新服务端内容")
                 }
-                if section == 1 && model.settings.isConfigured {
+                if model.settings.isConfigured {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button { showingNewJob = true } label: {
+                        Button {
+                            if section == 1 { showingNewJob = true }
+                            else { newSessionTitle = ""; creatingSession = true }
+                        } label: {
                             Image(systemName: "plus")
                         }
-                        .accessibilityLabel("新建定时任务")
+                        .disabled(sessionBusy || busyJobID != nil)
+                        .accessibilityLabel(section == 1 ? "新建定时任务" : "新建服务端会话")
                     }
                 }
             }
             .tint(HermesTheme.accent)
             .sheet(isPresented: $showingNewJob) {
-                NewRemoteJobView {
+                RemoteJobEditorView(job: nil) {
                     Task { await reload() }
+                }
+            }
+            .sheet(item: $editingJob) { job in
+                RemoteJobEditorView(job: job) { Task { await reload() } }
+            }
+            .navigationDestination(isPresented: $showingCreatedSession) {
+                if let session = createdSession {
+                    RemoteSessionDetailView(session: session, client: client) { Task { await reload() } }
                 }
             }
             .task { await reload() }
@@ -70,6 +89,11 @@ struct RemoteWorkspaceView: View {
             )) {
                 Button("知道了", role: .cancel) { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
+            .alert("新建服务端会话", isPresented: $creatingSession) {
+                TextField("标题（可选）", text: $newSessionTitle)
+                Button("取消", role: .cancel) {}
+                Button("创建") { Task { await createSession() } }
+            } message: { Text("消息会保存在 Hermes 服务器上，可从其他客户端继续。") }
             .confirmationDialog("立即运行“\(jobToRun?.name ?? "")”？", isPresented: Binding(
                 get: { jobToRun != nil }, set: { if !$0 { jobToRun = nil } }
             )) {
@@ -80,6 +104,16 @@ struct RemoteWorkspaceView: View {
                 }
                 Button("取消", role: .cancel) { jobToRun = nil }
             } message: { Text("此操作会在服务器上调度一次运行；已暂停的任务也会恢复。") }
+            .confirmationDialog("删除“\(jobToDelete?.name ?? "")”？", isPresented: Binding(
+                get: { jobToDelete != nil }, set: { if !$0 { jobToDelete = nil } }
+            )) {
+                Button("删除任务", role: .destructive) {
+                    guard let job = jobToDelete else { return }
+                    jobToDelete = nil
+                    Task { await delete(job) }
+                }
+                Button("取消", role: .cancel) { jobToDelete = nil }
+            } message: { Text("这会从服务器删除任务，并取消正在运行的任务。") }
         }
         .preferredColorScheme(.dark)
     }
@@ -96,7 +130,7 @@ struct RemoteWorkspaceView: View {
                     Section {
                         ForEach(sessions) { session in
                             NavigationLink {
-                                RemoteSessionDetailView(session: session) {
+                                RemoteSessionDetailView(session: session, client: client) {
                                     Task { await reload() }
                                 }
                             } label: {
@@ -156,8 +190,13 @@ struct RemoteWorkspaceView: View {
                             HStack {
                                 Text(job.name).font(.headline)
                                 Spacer()
-                                Text(job.isPaused ? "已暂停" : (job.state ?? "计划中"))
-                                    .font(.caption).foregroundStyle(job.isPaused ? Color.orange : Color.green)
+                                Text(job.statusLabel)
+                                    .font(.caption).foregroundStyle(job.isPaused || job.state == "error" ? Color.orange : Color.green)
+                                Menu {
+                                    Button("编辑", systemImage: "pencil") { editingJob = job }
+                                    Button("删除", systemImage: "trash", role: .destructive) { jobToDelete = job }
+                                } label: { Image(systemName: "ellipsis.circle") }
+                                .disabled(busyJobID != nil)
                             }
                             Text(job.scheduleDisplay ?? "未设置日程")
                                 .font(.subheadline).foregroundStyle(HermesTheme.muted)
@@ -170,6 +209,9 @@ struct RemoteWorkspaceView: View {
                             if let status = job.lastStatus, !status.isEmpty {
                                 Text("上次：\(status)").font(.caption2).foregroundStyle(HermesTheme.muted)
                             }
+                            if let error = job.lastError, !error.isEmpty {
+                                Text(error).font(.caption).foregroundStyle(.orange).lineLimit(3)
+                            }
                             HStack(spacing: 18) {
                                 Button(job.isPaused ? "恢复" : "暂停") {
                                     Task { await toggle(job) }
@@ -180,6 +222,7 @@ struct RemoteWorkspaceView: View {
                                 if busyJobID == job.id { ProgressView() }
                             }
                             .font(.subheadline.weight(.medium))
+                            .buttonStyle(.borderless)
                         }
                         .padding(.vertical, 7)
                         .listRowBackground(HermesTheme.surface)
@@ -233,6 +276,7 @@ struct RemoteWorkspaceView: View {
     }
 
     private func toggle(_ job: RemoteJob) async {
+        guard busyJobID == nil else { return }
         busyJobID = job.id
         defer { busyJobID = nil }
         do {
@@ -242,6 +286,7 @@ struct RemoteWorkspaceView: View {
     }
 
     private func run(_ job: RemoteJob) async {
+        guard busyJobID == nil else { return }
         busyJobID = job.id
         defer { busyJobID = nil }
         do {
@@ -249,197 +294,24 @@ struct RemoteWorkspaceView: View {
             jobs = try await client.jobs()
         } catch { errorMessage = error.localizedDescription }
     }
-}
 
-private struct RemoteSessionDetailView: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
-    let session: RemoteSession
-    let onChange: () -> Void
-    @State private var messages: [RemoteMessage] = []
-    @State private var loading = true
-    @State private var editingTitle = false
-    @State private var title = ""
-    @State private var deleting = false
-    @State private var busy = false
-    @State private var errorMessage: String?
-
-    private var client: HermesClient { HermesClient(settings: model.settings) }
-
-    var body: some View {
-        Group {
-            if loading {
-                ProgressView("正在读取消息…").frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if messages.isEmpty {
-                ContentUnavailableView("没有可显示的消息", systemImage: "text.bubble")
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(messages) { message in
-                            if message.displayKind != "hidden" && !message.content.isEmpty {
-                                VStack(alignment: .leading, spacing: 7) {
-                                    Text(label(for: message))
-                                        .font(.caption.weight(.bold)).foregroundStyle(HermesTheme.accent)
-                                    Text(message.content)
-                                        .font(.body).textSelection(.enabled)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(14)
-                                .background(HermesTheme.surface, in: RoundedRectangle(cornerRadius: 14))
-                            }
-                        }
-                    }
-                    .padding(16)
-                }
-                .refreshable { await load() }
-            }
-        }
-        .background(HermesTheme.background)
-        .navigationTitle(session.displayTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("刷新消息", systemImage: "arrow.clockwise") { Task { await load() } }
-                    Button("重命名", systemImage: "pencil") {
-                        title = session.title ?? ""
-                        editingTitle = true
-                    }
-                    Button("删除服务端会话", systemImage: "trash", role: .destructive) { deleting = true }
-                } label: { Image(systemName: "ellipsis.circle") }
-                .disabled(busy)
-            }
-        }
-        .task { await load() }
-        .alert("重命名服务端会话", isPresented: $editingTitle) {
-            TextField("标题", text: $title)
-            Button("取消", role: .cancel) {}
-            Button("保存") { Task { await rename() } }
-        }
-        .confirmationDialog("删除“\(session.displayTitle)”及其服务端消息？", isPresented: $deleting) {
-            Button("删除", role: .destructive) { Task { await delete() } }
-            Button("取消", role: .cancel) {}
-        }
-        .alert("服务端操作失败", isPresented: Binding(
-            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("知道了", role: .cancel) { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
-    }
-
-    private func label(for message: RemoteMessage) -> String {
-        switch message.role {
-        case "user": return "我"
-        case "assistant": return "Hermes"
-        case "tool": return message.toolName ?? "工具"
-        case "system": return "系统"
-        default: return message.role
-        }
-    }
-
-    private func load() async {
-        loading = true
-        defer { loading = false }
-        do { messages = try await client.sessionMessages(session.id) }
-        catch { errorMessage = error.localizedDescription }
-    }
-
-    private func rename() async {
-        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return }
-        busy = true
-        defer { busy = false }
+    private func createSession() async {
+        guard !sessionBusy else { return }
+        sessionBusy = true
+        defer { sessionBusy = false }
         do {
-            _ = try await client.renameSession(session.id, title: clean)
-            onChange()
-            dismiss()
+            createdSession = try await client.createSession(title: newSessionTitle.trimmingCharacters(in: .whitespacesAndNewlines))
+            showingCreatedSession = true
         } catch { errorMessage = error.localizedDescription }
     }
 
-    private func delete() async {
-        busy = true
-        defer { busy = false }
+    private func delete(_ job: RemoteJob) async {
+        guard busyJobID == nil else { return }
+        busyJobID = job.id
+        defer { busyJobID = nil }
         do {
-            try await client.deleteSession(session.id)
-            onChange()
-            dismiss()
-        } catch { errorMessage = error.localizedDescription }
-    }
-}
-
-private struct NewRemoteJobView: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
-    let onCreate: () -> Void
-    @State private var name = ""
-    @State private var prompt = ""
-    @State private var schedule = "every 1h"
-    @State private var saving = false
-    @State private var errorMessage: String?
-
-    private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !schedule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !saving
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("任务") {
-                    TextField("名称", text: $name)
-                    TextField("让 Hermes 做什么", text: $prompt, axis: .vertical)
-                        .lineLimit(3...8)
-                }
-                Section("运行时间") {
-                    TextField("every 1h", text: $schedule)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Text("示例：every 1h、every day at 9am、0 9 * * *、in 30m。具体时间按 Hermes 服务端时区计算。")
-                        .font(.caption).foregroundStyle(HermesTheme.muted)
-                }
-                Section {
-                    Text("任务由 Hermes 服务端调度；创建后可在这里暂停、恢复或立即运行。")
-                        .font(.caption).foregroundStyle(HermesTheme.muted)
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(HermesTheme.background)
-            .navigationTitle("新建定时任务")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await create() }
-                    } label: {
-                        if saving { ProgressView() } else { Text("创建") }
-                    }
-                    .disabled(!canSave)
-                }
-            }
-            .tint(HermesTheme.accent)
-            .alert("创建失败", isPresented: Binding(
-                get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-            )) {
-                Button("知道了", role: .cancel) { errorMessage = nil }
-            } message: { Text(errorMessage ?? "") }
-        }
-        .preferredColorScheme(.dark)
-    }
-
-    private func create() async {
-        guard canSave else { return }
-        saving = true
-        defer { saving = false }
-        do {
-            _ = try await HermesClient(settings: model.settings).createJob(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                schedule: schedule.trimmingCharacters(in: .whitespacesAndNewlines),
-                prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
-            onCreate()
-            dismiss()
+            try await client.deleteJob(job.id)
+            jobs.removeAll { $0.id == job.id }
         } catch { errorMessage = error.localizedDescription }
     }
 }

@@ -33,7 +33,24 @@ struct RemoteSessionPage: Decodable {
 
 struct RemoteSessionResponse: Decodable { let session: RemoteSession }
 struct RemoteSessionDeleteResponse: Decodable { let deleted: Bool }
-struct RemoteMessagesResponse: Decodable { let data: [RemoteMessage] }
+struct RemoteMessagesResponse: Decodable {
+    let data: [RemoteMessage]
+    let sessionID: String?
+    let pagination: Pagination?
+
+    var hasMore: Bool { data.count >= (pagination?.limit ?? 100) }
+
+    struct Pagination: Decodable {
+        let limit: Int
+        let offset: Int
+        let returned: Int
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case data, pagination
+        case sessionID = "session_id"
+    }
+}
 
 struct RemoteMessage: Identifiable, Decodable {
     let id: String
@@ -42,6 +59,8 @@ struct RemoteMessage: Identifiable, Decodable {
     let timestamp: Double?
     let toolName: String?
     let displayKind: String?
+
+    var isVisible: Bool { displayKind != "hidden" && !content.isEmpty }
 
     enum CodingKeys: String, CodingKey {
         case id, role, content, timestamp
@@ -97,15 +116,49 @@ struct RemoteJob: Identifiable, Decodable {
     let nextRunAt: String?
     let lastRunAt: String?
     let lastStatus: String?
+    let lastError: String?
+    let schedule: Schedule?
 
     var isPaused: Bool { enabled == false || state == "paused" }
+    var editableSchedule: String {
+        switch schedule?.kind {
+        case "cron": return schedule?.expr ?? scheduleDisplay ?? ""
+        case "interval": return schedule?.minutes.map { "every \($0)m" } ?? scheduleDisplay ?? ""
+        case "once": return schedule?.runAt ?? scheduleDisplay ?? ""
+        default: return scheduleDisplay ?? ""
+        }
+    }
+
+    var statusLabel: String {
+        if isPaused { return "已暂停" }
+        switch state {
+        case "scheduled": return "计划中"
+        case "running": return "运行中"
+        case "completed": return "已完成"
+        case "error": return "运行出错"
+        default: return state ?? "计划中"
+        }
+    }
+
+    struct Schedule: Decodable {
+        let kind: String?
+        let expr: String?
+        let minutes: Int?
+        let runAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case kind, expr, minutes
+            case runAt = "run_at"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, prompt, state, enabled
+        case id, name, prompt, state, enabled, schedule
         case scheduleDisplay = "schedule_display"
         case nextRunAt = "next_run_at"
         case lastRunAt = "last_run_at"
         case lastStatus = "last_status"
+        case lastError = "last_error"
     }
 }
 
