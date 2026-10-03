@@ -6,6 +6,7 @@ struct ChatView: View {
     @State private var draft = ""
     @State private var showingHistory = false
     @State private var showingSettings = false
+    @State private var showingRemote = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var pendingImage: Data?
     @State private var loadingPhoto = false
@@ -71,6 +72,7 @@ struct ChatView: View {
         }
         .background(HermesTheme.background.ignoresSafeArea())
         .sheet(isPresented: $showingHistory) { HistoryView() }
+        .sheet(isPresented: $showingRemote) { RemoteWorkspaceView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .task { await model.checkConnection() }
         .onChange(of: selectedPhoto) { _, item in
@@ -142,6 +144,12 @@ struct ChatView: View {
             }
             .disabled(model.isSending)
             .accessibilityLabel("新对话")
+            Button { showingRemote = true } label: {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 18))
+                    .frame(width: 42, height: 42)
+            }
+            .accessibilityLabel("服务端会话与定时任务")
             Button { showingSettings = true } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: 18))

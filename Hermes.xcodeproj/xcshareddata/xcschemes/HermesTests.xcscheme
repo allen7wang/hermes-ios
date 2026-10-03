@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2118BAABDF2BC15AA4CE6721"
+               BlueprintIdentifier = "E54F8BDB39E6EF243BC7CC28"
                BuildableName = "Hermes.app"
                BlueprintName = "Hermes"
                ReferencedContainer = "container:Hermes.xcodeproj">
@@ -28,7 +28,7 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D3A6F743B422E9115C106E72"
+               BlueprintIdentifier = "19E840DC683BB49C7528D15E"
                BuildableName = "HermesTests.xctest"
                BlueprintName = "HermesTests"
                ReferencedContainer = "container:Hermes.xcodeproj">
@@ -46,7 +46,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D3A6F743B422E9115C106E72"
+               BlueprintIdentifier = "19E840DC683BB49C7528D15E"
                BuildableName = "HermesTests.xctest"
                BlueprintName = "HermesTests"
                ReferencedContainer = "container:Hermes.xcodeproj">

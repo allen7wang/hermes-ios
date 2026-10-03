@@ -57,6 +57,78 @@ struct HermesClient {
         return response.data.map(\.id)
     }
 
+    func sessions(offset: Int = 0) async throws -> RemoteSessionPage {
+        var components = URLComponents(url: try endpoint("api", "sessions"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "offset", value: String(offset)),
+            URLQueryItem(name: "include_children", value: "true")
+        ]
+        return try await request(RemoteSessionPage.self, url: components.url!)
+    }
+
+    func sessionMessages(_ id: String) async throws -> [RemoteMessage] {
+        var components = URLComponents(url: try endpoint("api", "sessions", id, "messages"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "order", value: "latest"),
+            URLQueryItem(name: "limit", value: "100"),
+            URLQueryItem(name: "inline_images", value: "false")
+        ]
+        let response: RemoteMessagesResponse = try await request(RemoteMessagesResponse.self, url: components.url!)
+        return response.data
+    }
+
+    func renameSession(_ id: String, title: String) async throws -> RemoteSession {
+        let response: RemoteSessionResponse = try await request(
+            RemoteSessionResponse.self,
+            url: endpoint("api", "sessions", id),
+            method: "PATCH",
+            body: ["title": title]
+        )
+        return response.session
+    }
+
+    func deleteSession(_ id: String) async throws {
+        let response: RemoteSessionDeleteResponse = try await request(
+            RemoteSessionDeleteResponse.self,
+            url: endpoint("api", "sessions", id),
+            method: "DELETE"
+        )
+        guard response.deleted else { throw ClientError.invalidResponse }
+    }
+
+    func jobs() async throws -> [RemoteJob] {
+        var components = URLComponents(url: try endpoint("api", "jobs"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "include_disabled", value: "true")]
+        let response: RemoteJobsResponse = try await request(RemoteJobsResponse.self, url: components.url!)
+        return response.jobs
+    }
+
+    func createJob(name: String, schedule: String, prompt: String) async throws -> RemoteJob {
+        let response: RemoteJobResponse = try await request(
+            RemoteJobResponse.self,
+            url: endpoint("api", "jobs"),
+            method: "POST",
+            body: ["name": name, "schedule": schedule, "prompt": prompt, "deliver": "local"]
+        )
+        return response.job
+    }
+
+    func setJobPaused(_ id: String, paused: Bool) async throws -> RemoteJob {
+        let response: RemoteJobResponse = try await request(
+            RemoteJobResponse.self,
+            url: endpoint("api", "jobs", id, paused ? "pause" : "resume"),
+            method: "POST"
+        )
+        return response.job
+    }
+
+    func runJob(_ id: String) async throws {
+        // The run endpoint acknowledges scheduling; completion is reported by a later refresh.
+        _ = try await request(RemoteJobResponse.self,
+                              url: endpoint("api", "jobs", id, "run"), method: "POST")
+    }
+
     func stream(
         messages: [ChatMessage],
         onEvent: (ChatStreamEvent) async -> Void
@@ -151,10 +223,25 @@ struct HermesClient {
     }
 
     private func perform(url: URL) async throws -> Data {
+        try await perform(request: authorizedRequest(url: url))
+    }
+
+    private func request<T: Decodable>(_ type: T.Type, url: URL, method: String = "GET", body: [String: String]? = nil) async throws -> T {
+        var urlRequest = authorizedRequest(url: url)
+        urlRequest.httpMethod = method
+        if let body {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.httpBody = try JSONEncoder().encode(body)
+        }
+        let data = try await perform(request: urlRequest)
+        return try JSONDecoder().decode(type, from: data)
+    }
+
+    private func perform(request: URLRequest) async throws -> Data {
         let configuration = sessionConfiguration.copy() as! URLSessionConfiguration
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        let (data, response) = try await session.data(for: authorizedRequest(url: url))
+        let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else {
             throw ClientError.invalidResponse
         }

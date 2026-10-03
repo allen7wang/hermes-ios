@@ -8,6 +8,8 @@
 - 通过 `/v1/chat/completions` 实时显示流式回复与工具运行状态，支持停止和失败后重试。
 - 从照片图库选择一张图片随消息发送；图片会压缩到最长边 1600 像素、最多 2 MB。
 - 在设备本地保存对话和图片，支持搜索、重命名、分享文本、新建及删除对话；API 密钥存于系统钥匙串。
+- 在“服务端”查看 Hermes 的远端会话和最近 100 条消息，支持分页、重命名和删除远端会话。
+- 查看所有定时任务（包括已暂停任务），创建任务，暂停、恢复或手动运行任务。
 
 ## 运行
 
@@ -20,6 +22,8 @@
 
 本仓库发布的是 Xcode 源代码工程，不包含签名后的 IPA。图片理解能力取决于你配置的 Hermes 模型。分享对话时导出文本，图片用 `[图片]` 标记；删除对话会一并删除其本地图片。
 
+“对话记录”保存于当前设备；“服务端”读取 Hermes 服务器上的会话，二者不会自动合并。服务端会话页目前显示最近 100 条消息；新建定时任务使用 Hermes 的日程表达式，例如 `every 1h`、`every day at 9am` 或 `0 9 * * *`，时间以服务端配置的时区为准。暂停、恢复及手动运行会直接改变服务器上的任务状态。
+
 ## 构建
 
 ```sh
@@ -30,6 +34,6 @@ xcodebuild -project Hermes.xcodeproj -scheme Hermes \
 
 工程文件可用 `ruby tools/generate_project.rb` 重新生成。图标可用 `python3 tools/generate_icon.py Hermes/Assets.xcassets/AppIcon.appiconset/AppIcon.png` 重新生成。
 
-流式解析和旧对话兼容性测试可在 Xcode 的 `HermesTests` scheme 中运行。
+流式解析、旧对话兼容性及服务端 API 测试可在 Xcode 的 `HermesTests` scheme 中运行。
 
 API 格式依据 [Hermes Agent 官方 API Server 文档](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server)。
