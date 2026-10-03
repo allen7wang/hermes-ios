@@ -23,7 +23,7 @@ struct HistoryView: View {
                     ContentUnavailableView(
                         "还没有对话",
                         systemImage: "bubble.left.and.bubble.right",
-                        description: Text("发送第一条消息后，对话会保存在这台设备上。")
+                        description: Text("当前连接：\(model.activeProfileName)。发送第一条消息后，对话会保存在这台设备上。")
                     )
                 } else if filteredConversations.isEmpty {
                     ContentUnavailableView.search(text: searchText)
@@ -76,7 +76,7 @@ struct HistoryView: View {
                 }
             }
             .background(HermesTheme.background)
-            .navigationTitle("对话记录")
+            .navigationTitle(model.activeProfileName + " · 对话记录")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "搜索标题或消息")
             .alert("重命名对话", isPresented: Binding(

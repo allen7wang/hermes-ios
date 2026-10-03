@@ -26,12 +26,14 @@ struct Conversation: Identifiable, Codable, Equatable {
     var title: String
     var messages: [ChatMessage]
     var updatedAt: Date
+    var profileID: UUID?
 }
 
-struct ConnectionSettings: Equatable {
+struct ConnectionSettings: Hashable {
     var serverURL: String
     var model: String
     var apiKey: String
+    var profileID: UUID? = nil
 
     var isConfigured: Bool {
         !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&

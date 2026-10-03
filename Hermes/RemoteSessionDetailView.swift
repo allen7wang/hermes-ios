@@ -4,14 +4,13 @@ struct RemoteSessionDetailView: View {
     @StateObject private var conversation: RemoteConversationModel
     @Environment(\.dismiss) private var dismiss
     let onChange: () -> Void
-    @State private var draft = ""
     @State private var editingTitle = false
     @State private var title = ""
     @State private var deleting = false
     @State private var busy = false
 
-    init(session: RemoteSession, client: HermesClient, onChange: @escaping () -> Void) {
-        _conversation = StateObject(wrappedValue: RemoteConversationModel(session: session, client: client))
+    init(session: RemoteSession, client: HermesClient, draftStore: DraftStore, onChange: @escaping () -> Void) {
+        _conversation = StateObject(wrappedValue: RemoteConversationModel(session: session, client: client, draftStore: draftStore))
         self.onChange = onChange
     }
 
@@ -139,13 +138,13 @@ struct RemoteSessionDetailView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 12) {
-            TextField("继续这段服务端会话…", text: $draft, axis: .vertical)
+            TextField("继续这段服务端会话…", text: $conversation.draft, axis: .vertical)
                 .lineLimit(1...5)
                 .padding(12)
                 .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 16))
                 .accessibilityLabel("服务端会话消息")
             Button {
-                if conversation.send(draft) { draft = "" }
+                _ = conversation.send(conversation.draft)
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.headline)
@@ -153,8 +152,8 @@ struct RemoteSessionDetailView: View {
                     .frame(width: 44, height: 44)
                     .background(HermesTheme.accent, in: Circle())
             }
-            .disabled(!conversation.canSend || busy || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(conversation.canSend && !busy && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.4)
+            .disabled(!conversation.canSend || busy || conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity(conversation.canSend && !busy && !conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.4)
             .accessibilityLabel("发送到服务端会话")
         }
         .padding(16)

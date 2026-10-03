@@ -36,7 +36,7 @@ struct RemoteWorkspaceView: View {
 
                 if !model.settings.isConfigured {
                     ContentUnavailableView("先连接 Hermes", systemImage: "server.rack",
-                                           description: Text("在连接设置中填写服务器地址和 API 密钥。"))
+                                           description: Text("在连接管理中填写服务器地址和 API 密钥。"))
                 } else if section == 0 {
                     sessionList
                 } else {
@@ -44,7 +44,7 @@ struct RemoteWorkspaceView: View {
                 }
             }
             .background(HermesTheme.background)
-            .navigationTitle("服务端")
+            .navigationTitle(model.activeProfileName + " · 服务端")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } }
@@ -79,7 +79,7 @@ struct RemoteWorkspaceView: View {
             }
             .navigationDestination(isPresented: $showingCreatedSession) {
                 if let session = createdSession {
-                    RemoteSessionDetailView(session: session, client: client) { Task { await reload() } }
+                    RemoteSessionDetailView(session: session, client: client, draftStore: model.draftStore) { Task { await reload() } }
                 }
             }
             .task { await reload() }
@@ -130,7 +130,7 @@ struct RemoteWorkspaceView: View {
                     Section {
                         ForEach(sessions) { session in
                             NavigationLink {
-                                RemoteSessionDetailView(session: session, client: client) {
+                                RemoteSessionDetailView(session: session, client: client, draftStore: model.draftStore) {
                                     Task { await reload() }
                                 }
                             } label: {

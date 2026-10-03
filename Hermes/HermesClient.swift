@@ -21,22 +21,23 @@ struct HermesClient {
         self.sessionConfiguration = sessionConfiguration
     }
 
-    private var rootURL: URL {
+    var rootURL: URL {
         get throws {
             let raw = settings.serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
             guard var parts = URLComponents(string: raw),
                   let scheme = parts.scheme?.lowercased(),
-                  let host = parts.host, !host.isEmpty,
+                  let host = parts.host?.lowercased(), !host.isEmpty,
                   parts.user == nil, parts.password == nil,
                   parts.query == nil, parts.fragment == nil else {
                 throw ClientError.invalidURL
             }
 
-            let octets = host.split(separator: ".").compactMap { Int($0) }
-            let private172 = octets.count == 4 && octets[0] == 172 && (16...31).contains(octets[1])
-            let localHost = host == "localhost" || host == "127.0.0.1" ||
-                host.hasSuffix(".local") || host.hasPrefix("192.168.") ||
-                host.hasPrefix("10.") || private172
+            let octets = host.split(separator: ".", omittingEmptySubsequences: false).compactMap { Int($0) }
+            let validIPv4 = octets.count == 4 && octets.allSatisfy { (0...255).contains($0) }
+                && host.split(separator: ".", omittingEmptySubsequences: false).count == 4
+            let privateIP = validIPv4 && (octets[0] == 10 || octets[0] == 127 ||
+                (octets[0] == 192 && octets[1] == 168) || (octets[0] == 172 && (16...31).contains(octets[1])))
+            let localHost = host == "localhost" || host.hasSuffix(".local") || privateIP
             guard scheme == "https" || (scheme == "http" && localHost) else {
                 throw ClientError.insecureURL
             }
@@ -45,6 +46,9 @@ struct HermesClient {
             if path == "v1" { path = "" }
             else if path.hasSuffix("/v1") { path.removeLast(3) }
             parts.path = path.isEmpty ? "" : "/" + path
+            parts.scheme = scheme
+            parts.host = host
+            if (scheme == "https" && parts.port == 443) || (scheme == "http" && parts.port == 80) { parts.port = nil }
             guard let url = parts.url else { throw ClientError.invalidURL }
             return url
         }
@@ -54,7 +58,8 @@ struct HermesClient {
         let url = try endpoint("v1", "models")
         let data = try await perform(url: url)
         let response = try JSONDecoder().decode(ModelsResponse.self, from: data)
-        return response.data.map(\.id)
+        var seen = Set<String>()
+        return response.data.map(\.id).filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     func sessions(offset: Int = 0) async throws -> RemoteSessionPage {

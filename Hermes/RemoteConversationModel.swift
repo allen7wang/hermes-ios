@@ -15,9 +15,25 @@ final class RemoteConversationModel: ObservableObject {
     @Published private(set) var streamedReply = ""
     @Published private(set) var progress = ""
     @Published var errorMessage: String?
+    @Published var draft = "" {
+        didSet {
+            do { try draftStore?.set(draft, for: draftKey) }
+            catch { errorMessage = "草稿保存失败：\(error.localizedDescription)" }
+        }
+    }
 
     let client: HermesClient
-    private var activeSessionID: String
+    private let draftStore: DraftStore?
+    private var activeSessionID: String {
+        didSet {
+            guard oldValue != activeSessionID else { return }
+            do {
+                try draftStore?.move(from: DraftStore.remoteKey(settings: client.settings, sessionID: oldValue), to: draftKey)
+                if let draftStore { draft = draftStore.text(for: draftKey) }
+            } catch { errorMessage = "草稿保存失败：\(error.localizedDescription)" }
+        }
+    }
+    private var draftKey: String { DraftStore.remoteKey(settings: client.settings, sessionID: activeSessionID) }
     private var nextMessageOffset = 0
     private var runID: String?
     private var sendTask: Task<Void, Never>?
@@ -25,10 +41,12 @@ final class RemoteConversationModel: ObservableObject {
     var visibleMessages: [RemoteMessage] { messages.filter(\.isVisible) }
     var canSend: Bool { !isSending && !isLoading && !isLoadingOlder }
 
-    init(session: RemoteSession, client: HermesClient) {
+    init(session: RemoteSession, client: HermesClient, draftStore: DraftStore? = nil) {
         self.session = session
         self.client = client
         activeSessionID = session.id
+        self.draftStore = draftStore
+        draft = draftStore?.text(for: DraftStore.remoteKey(settings: client.settings, sessionID: session.id)) ?? ""
     }
 
     func reload() async {
@@ -57,6 +75,7 @@ final class RemoteConversationModel: ObservableObject {
     func send(_ rawInput: String) -> Bool {
         let input = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend, !input.isEmpty else { return false }
+        draft = ""
         isSending = true
         isStopping = false
         transientInput = input
@@ -135,7 +154,11 @@ final class RemoteConversationModel: ObservableObject {
 
     func delete() async -> Bool {
         guard canSend else { return false }
-        do { try await client.deleteSession(activeSessionID); return true }
+        do {
+            try await client.deleteSession(activeSessionID)
+            draft = ""
+            return true
+        }
         catch { errorMessage = error.localizedDescription; return false }
     }
 

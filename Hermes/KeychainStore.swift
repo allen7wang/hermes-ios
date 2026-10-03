@@ -3,9 +3,7 @@ import Security
 
 enum KeychainStore {
     private static let service = "com.a7w.hermes.api"
-    private static let account = "api-server-key"
-
-    static func readKey() -> String {
+    static func readKey(account: String = "api-server-key") -> String {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -20,14 +18,17 @@ enum KeychainStore {
         return key
     }
 
-    static func saveKey(_ key: String) throws {
+    static func saveKey(_ key: String, account: String = "api-server-key") throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
         if key.isEmpty {
-            SecItemDelete(query as CFDictionary)
+            let status = SecItemDelete(query as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw KeychainError.saveFailed(status)
+            }
             return
         }
 
@@ -59,4 +60,14 @@ enum KeychainStore {
             }
         }
     }
+}
+
+protocol CredentialStore {
+    func read(account: String) -> String
+    func save(_ key: String, account: String) throws
+}
+
+struct SystemCredentialStore: CredentialStore {
+    func read(account: String) -> String { KeychainStore.readKey(account: account) }
+    func save(_ key: String, account: String) throws { try KeychainStore.saveKey(key, account: account) }
 }

@@ -3,7 +3,6 @@ import PhotosUI
 
 struct ChatView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var draft = ""
     @State private var showingHistory = false
     @State private var showingSettings = false
     @State private var showingRemote = false
@@ -74,19 +73,28 @@ struct ChatView: View {
         .sheet(isPresented: $showingHistory) { HistoryView() }
         .sheet(isPresented: $showingRemote) { RemoteWorkspaceView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
-        .task { await model.checkConnection() }
+        .task(id: model.settings) { await model.checkConnection() }
+        .onChange(of: model.draftKey) { _, _ in
+            pendingImage = nil
+            selectedPhoto = nil
+            loadingPhoto = false
+        }
         .onChange(of: selectedPhoto) { _, item in
             guard let item else { return }
             loadingPhoto = true
+            let context = model.draftKey
             Task {
                 do {
                     guard let original = try await item.loadTransferable(type: Data.self) else {
                         throw ImageAttachmentStore.ImageError.invalidImage
                     }
+                    guard context == model.draftKey, selectedPhoto == item else { return }
                     pendingImage = try ImageAttachmentStore.prepare(original)
                 } catch {
+                    guard context == model.draftKey, selectedPhoto == item else { return }
                     model.errorMessage = error.localizedDescription
                 }
+                guard context == model.draftKey, selectedPhoto == item else { return }
                 loadingPhoto = false
                 selectedPhoto = nil
             }
@@ -129,7 +137,8 @@ struct ChatView: View {
                         Circle()
                             .fill(model.connectionState == .connected ? Color.green : HermesTheme.muted)
                             .frame(width: 6, height: 6)
-                        Text(connectionLabel)
+                        Text("\(model.activeProfileName) · \(connectionLabel)")
+                            .lineLimit(1)
                             .font(.system(size: 11))
                             .foregroundStyle(HermesTheme.muted)
                     }
@@ -155,7 +164,7 @@ struct ChatView: View {
                     .font(.system(size: 18))
                     .frame(width: 42, height: 42)
             }
-            .accessibilityLabel("连接设置")
+            .accessibilityLabel("连接管理")
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
@@ -221,7 +230,7 @@ struct ChatView: View {
 
     private func suggestion(_ text: String) -> some View {
         Button {
-            draft = text
+            model.draft = text
         } label: {
             HStack {
                 Image(systemName: "sparkle")
@@ -288,7 +297,7 @@ struct ChatView: View {
                 .disabled(model.isSending || loadingPhoto)
                 .accessibilityLabel("添加图片")
 
-                TextField("给 Hermes 发送消息…", text: $draft, axis: .vertical)
+                TextField("给 Hermes 发送消息…", text: $model.draft, axis: .vertical)
                     .lineLimit(1...5)
                     .font(.system(size: 15))
                     .tint(HermesTheme.accent)
@@ -299,8 +308,7 @@ struct ChatView: View {
 
                 Button {
                     if model.settings.isConfigured {
-                        if model.send(draft, imageData: pendingImage) {
-                            draft = ""
+                        if model.send(model.draft, imageData: pendingImage) {
                             pendingImage = nil
                         }
                     } else {
@@ -325,7 +333,7 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || pendingImage != nil)
+        (!model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || pendingImage != nil)
             && !model.isSending && !loadingPhoto
     }
 }

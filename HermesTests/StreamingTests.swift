@@ -259,6 +259,79 @@ final class StreamingTests: XCTestCase {
         XCTAssertEqual(MockURLProtocol.lastRequest?.url?.path, "/v1/runs/run_1/stop")
     }
 
+    func testModelDiscoveryDeduplicatesAliasesAndPreservesProfileRoute() async throws {
+        MockURLProtocol.responseData = Data(#"{"data":[{"id":"work"},{"id":""},{"id":"work"},{"id":"custom"}]}"#.utf8)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let client = HermesClient(settings: ConnectionSettings(serverURL: "https://hermes.test/p/work/v1", model: "custom", apiKey: "profile-key"), sessionConfiguration: configuration)
+        let models = try await client.availableModels()
+        XCTAssertEqual(models, ["work", "custom"])
+        XCTAssertEqual(MockURLProtocol.lastRequest?.url?.path, "/p/work/v1/models")
+        XCTAssertEqual(MockURLProtocol.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer profile-key")
+    }
+
+    @MainActor
+    func testSendingClearsOnlySubmittedDraftAndLocksConnectionChanges() async throws {
+        let suite = "HermesTests.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defer { defaults.removePersistentDomain(forName: suite); try? FileManager.default.removeItem(at: directory) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let model = AppModel(defaults: defaults, directory: directory, credentials: MemoryCredentials(), sessionConfiguration: configuration)
+        let home = model.activeProfileID
+        let work = try model.saveProfile(id: nil, name: "工作", connection: makeClient().settings)
+        model.draft = "工作草稿"
+        model.selectProfile(home)
+        model.draft = "未配置时保留"
+        XCTAssertFalse(model.send(model.draft))
+        XCTAssertEqual(model.draft, "未配置时保留")
+        _ = try model.saveProfile(id: home, name: "家中", connection: makeClient().settings)
+        let sentKey = model.draftKey
+        MockURLProtocol.chunks = ["data: {\"choices\":[{\"delta\":{\"content\":\"回复\"},\"finish_reason\":null}]}\n\n", "data: [DONE]\n\n"]
+        XCTAssertTrue(model.send(model.draft))
+        XCTAssertEqual(model.draft, "")
+        XCTAssertEqual(model.draftStore.text(for: sentKey), "")
+        model.selectProfile(work)
+        XCTAssertEqual(model.activeProfileID, home)
+        XCTAssertThrowsError(try model.removeProfile(work))
+        XCTAssertThrowsError(try model.saveProfile(id: work, name: "不能修改", connection: makeClient().settings))
+        // Wait for the mocked network stream with a bounded deadline.
+        for _ in 0..<200 where model.isSending { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(model.isSending)
+        XCTAssertEqual(model.selectedConversation?.messages.last?.content, "回复")
+        model.selectProfile(work)
+        XCTAssertEqual(model.draft, "工作草稿")
+        XCTAssertTrue(model.conversations.isEmpty)
+    }
+
+    @MainActor
+    func testRemoteDraftsSurviveReopenAndFollowCompactedSessionID() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HermesDraftTests.\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DraftStore(directory: directory)
+        let session = try JSONDecoder().decode(RemoteSession.self, from: Data(#"{"id":"old-session"}"#.utf8))
+        var settings = makeClient().settings
+        settings.profileID = UUID()
+        let client = HermesClient(settings: settings, sessionConfiguration: makeClient().sessionConfiguration)
+        let model = RemoteConversationModel(session: session, client: client, draftStore: store)
+        model.draft = "稍后继续的内容"
+        let reopenedStore = DraftStore(directory: directory)
+        let reopened = RemoteConversationModel(session: session, client: client, draftStore: reopenedStore)
+        XCTAssertEqual(reopened.draft, "稍后继续的内容")
+        settings.profileID = UUID()
+        let other = RemoteConversationModel(session: session, client: HermesClient(settings: settings), draftStore: store)
+        XCTAssertEqual(other.draft, "")
+        MockURLProtocol.responseData = Data(#"{"session_id":"new-session","data":[]}"#.utf8)
+        await reopened.reload()
+        XCTAssertEqual(reopenedStore.text(for: DraftStore.remoteKey(settings: client.settings, sessionID: "old-session")), "")
+        XCTAssertEqual(reopenedStore.text(for: DraftStore.remoteKey(settings: client.settings, sessionID: "new-session")), "稍后继续的内容")
+        reopened.draft = "更新后的草稿"
+        let compacted = try JSONDecoder().decode(RemoteSession.self, from: Data(#"{"id":"new-session"}"#.utf8))
+        let latest = RemoteConversationModel(session: compacted, client: client, draftStore: DraftStore(directory: directory))
+        XCTAssertEqual(latest.draft, "更新后的草稿")
+    }
+
     private func makeClient() -> HermesClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
