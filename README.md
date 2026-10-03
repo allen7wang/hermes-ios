@@ -4,10 +4,10 @@
 
 ## 已实现
 
-- 配置服务地址、API 密钥与模型；通过 `/v1/models` 测试连接。
-- 通过 `/v1/chat/completions` 发送对话，支持停止等待中的请求。
-- 在设备本地保存对话；API 密钥存于系统钥匙串。
-- 深色界面、对话记录、新对话、删除对话和失败后重试。
+- 配置服务地址、API 密钥与模型；通过 `/v1/models` 测试连接，并在主界面查看连接状态。
+- 通过 `/v1/chat/completions` 实时显示流式回复与工具运行状态，支持停止和失败后重试。
+- 从照片图库选择一张图片随消息发送；图片会压缩到最长边 1600 像素、最多 2 MB。
+- 在设备本地保存对话和图片，支持搜索、重命名、分享文本、新建及删除对话；API 密钥存于系统钥匙串。
 
 ## 运行
 
@@ -18,7 +18,7 @@
 
 远程服务要求 HTTPS。局域网 HTTP 只接受 `localhost`、`.local` 主机名及私有 IPv4 地址。不要把带有终端工具权限的 Hermes API 直接暴露到公网。
 
-本仓库发布的是 Xcode 源代码工程，不包含签名后的 IPA。首版使用非流式聊天响应，等待较长任务时可停止请求并重试。
+本仓库发布的是 Xcode 源代码工程，不包含签名后的 IPA。图片理解能力取决于你配置的 Hermes 模型。分享对话时导出文本，图片用 `[图片]` 标记；删除对话会一并删除其本地图片。
 
 ## 构建
 
@@ -29,5 +29,7 @@ xcodebuild -project Hermes.xcodeproj -scheme Hermes \
 ```
 
 工程文件可用 `ruby tools/generate_project.rb` 重新生成。图标可用 `python3 tools/generate_icon.py Hermes/Assets.xcassets/AppIcon.appiconset/AppIcon.png` 重新生成。
+
+流式解析和旧对话兼容性测试可在 Xcode 的 `HermesTests` scheme 中运行。
 
 API 格式依据 [Hermes Agent 官方 API Server 文档](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server)。

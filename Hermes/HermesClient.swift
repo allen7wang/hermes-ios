@@ -1,7 +1,25 @@
 import Foundation
 
+enum ChatStreamEvent {
+    case delta(String)
+    case tool(ToolProgress)
+}
+
+struct ToolProgress: Decodable {
+    let tool: String?
+    let emoji: String?
+    let label: String?
+    let status: String?
+}
+
 struct HermesClient {
     let settings: ConnectionSettings
+    let sessionConfiguration: URLSessionConfiguration
+
+    init(settings: ConnectionSettings, sessionConfiguration: URLSessionConfiguration = .ephemeral) {
+        self.settings = settings
+        self.sessionConfiguration = sessionConfiguration
+    }
 
     private var rootURL: URL {
         get throws {
@@ -14,7 +32,6 @@ struct HermesClient {
                 throw ClientError.invalidURL
             }
 
-            // Keep HTTP available for a local gateway. Remote connections require HTTPS.
             let octets = host.split(separator: ".").compactMap { Int($0) }
             let private172 = octets.count == 4 && octets[0] == 172 && (16...31).contains(octets[1])
             let localHost = host == "localhost" || host == "127.0.0.1" ||
@@ -40,25 +57,86 @@ struct HermesClient {
         return response.data.map(\.id)
     }
 
-    func complete(messages: [ChatMessage]) async throws -> String {
+    func stream(
+        messages: [ChatMessage],
+        onEvent: (ChatStreamEvent) async -> Void
+    ) async throws -> String {
         let url = try endpoint("v1", "chat", "completions")
         var request = authorizedRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 600
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONEncoder().encode(
             CompletionRequest(
                 model: settings.model.isEmpty ? "hermes-agent" : settings.model,
-                messages: messages.map { .init(role: $0.role.rawValue, content: $0.content) },
-                stream: false
+                messages: try messages.map(CompletionMessage.init),
+                stream: true
             )
         )
-        let data = try await perform(request: request)
-        let response = try JSONDecoder().decode(CompletionResponse.self, from: data)
-        guard let content = response.choices.first?.message.content,
-              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+
+        let configuration = sessionConfiguration.copy() as! URLSessionConfiguration
+        configuration.timeoutIntervalForRequest = 600
+        configuration.timeoutIntervalForResource = 3600
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let response = response as? HTTPURLResponse else {
+            throw ClientError.invalidResponse
+        }
+        guard (200..<300).contains(response.statusCode) else {
+            var body = ""
+            for try await line in bytes.lines {
+                body += line
+                if body.count >= 300 { break }
+            }
+            throw ClientError.server(response.statusCode, String(body.prefix(300)))
+        }
+
+        var parser = SSEParser()
+        var text = ""
+        var finishReason: String?
+        var receivedDone = false
+        var lineBytes: [UInt8] = []
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            guard byte == 10 else {
+                lineBytes.append(byte)
+                if lineBytes.count > 1_000_000 { throw ClientError.invalidStream }
+                continue
+            }
+            if lineBytes.last == 13 { lineBytes.removeLast() }
+            let line = String(decoding: lineBytes, as: UTF8.self)
+            lineBytes.removeAll(keepingCapacity: true)
+            guard let frame = parser.consume(line) else { continue }
+            if frame.data == "[DONE]" {
+                receivedDone = true
+                break
+            }
+            if frame.event == "hermes.tool.progress" {
+                if let progress = try? JSONDecoder().decode(ToolProgress.self, from: Data(frame.data.utf8)) {
+                    await onEvent(.tool(progress))
+                }
+                continue
+            }
+            guard frame.event == nil || frame.event == "message" ||
+                    frame.event == "chat.completion.chunk" else { continue }
+            let chunk = try JSONDecoder().decode(CompletionChunk.self, from: Data(frame.data.utf8))
+            if let delta = chunk.choices.first?.delta.content, !delta.isEmpty {
+                text += delta
+                await onEvent(.delta(delta))
+            }
+            if let reason = chunk.choices.first?.finishReason { finishReason = reason }
+        }
+
+        guard receivedDone else { throw ClientError.incompleteStream }
+        if let finishReason, finishReason != "stop" {
+            throw ClientError.streamFailed(finishReason)
+        }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ClientError.emptyResponse
         }
-        return content
+        return text
     }
 
     private func endpoint(_ segments: String...) throws -> URL {
@@ -68,20 +146,15 @@ struct HermesClient {
     private func authorizedRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 300
+        request.timeoutInterval = 15
         return request
     }
 
     private func perform(url: URL) async throws -> Data {
-        try await perform(request: authorizedRequest(url: url))
-    }
-
-    private func perform(request: URLRequest) async throws -> Data {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 300
+        let configuration = sessionConfiguration.copy() as! URLSessionConfiguration
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: authorizedRequest(url: url))
         guard let response = response as? HTTPURLResponse else {
             throw ClientError.invalidResponse
         }
@@ -99,19 +172,73 @@ private struct ModelsResponse: Decodable {
 }
 
 private struct CompletionRequest: Encodable {
-    struct Message: Encodable {
-        let role: String
-        let content: String
-    }
     let model: String
-    let messages: [Message]
+    let messages: [CompletionMessage]
     let stream: Bool
 }
 
-private struct CompletionResponse: Decodable {
+private struct CompletionMessage: Encodable {
+    let role: String
+    let content: Content
+
+    init(_ message: ChatMessage) throws {
+        role = message.role.rawValue
+        if let imageID = message.imageID {
+            let image = try ImageAttachmentStore.load(imageID)
+            let imageURL = "data:image/jpeg;base64," + image.base64EncodedString()
+            var parts: [Part] = []
+            if !message.content.isEmpty { parts.append(.text(message.content)) }
+            parts.append(.image(imageURL))
+            content = .parts(parts)
+        } else {
+            content = .text(message.content)
+        }
+    }
+
+    enum Content: Encodable {
+        case text(String)
+        case parts([Part])
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .text(let value): try container.encode(value)
+            case .parts(let value): try container.encode(value)
+            }
+        }
+    }
+
+    struct Part: Encodable {
+        struct ImageURL: Encodable { let url: String }
+        let type: String
+        let text: String?
+        let imageURL: ImageURL?
+
+        static func text(_ value: String) -> Part {
+            Part(type: "text", text: value, imageURL: nil)
+        }
+
+        static func image(_ value: String) -> Part {
+            Part(type: "image_url", text: nil, imageURL: ImageURL(url: value))
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case type, text
+            case imageURL = "image_url"
+        }
+    }
+}
+
+private struct CompletionChunk: Decodable {
     struct Choice: Decodable {
-        struct Message: Decodable { let content: String? }
-        let message: Message
+        struct Delta: Decodable { let content: String? }
+        let delta: Delta
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case delta
+            case finishReason = "finish_reason"
+        }
     }
     let choices: [Choice]
 }
@@ -121,6 +248,9 @@ enum ClientError: LocalizedError {
     case insecureURL
     case invalidResponse
     case emptyResponse
+    case incompleteStream
+    case invalidStream
+    case streamFailed(String)
     case server(Int, String)
 
     var errorDescription: String? {
@@ -129,6 +259,9 @@ enum ClientError: LocalizedError {
         case .insecureURL: "远程服务请使用 HTTPS；HTTP 仅用于局域网地址。"
         case .invalidResponse: "服务没有返回有效的 HTTP 响应。"
         case .emptyResponse: "Hermes 返回了空内容。"
+        case .incompleteStream: "连接在回复完成前中断，请重试。"
+        case .invalidStream: "Hermes 返回的流式数据过大或无效。"
+        case .streamFailed(let reason): "Hermes 未完成回复（\(reason)），请重试。"
         case .server(let code, let message): "服务错误 \(code)：\(message)"
         }
     }

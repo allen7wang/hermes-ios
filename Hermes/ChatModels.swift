@@ -10,6 +10,15 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     let role: Role
     let content: String
     let createdAt: Date
+    var imageID: UUID?
+
+    init(id: UUID = UUID(), role: Role, content: String, createdAt: Date = Date(), imageID: UUID? = nil) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.createdAt = createdAt
+        self.imageID = imageID
+    }
 }
 
 struct Conversation: Identifiable, Codable, Equatable {
@@ -19,7 +28,7 @@ struct Conversation: Identifiable, Codable, Equatable {
     var updatedAt: Date
 }
 
-struct ConnectionSettings {
+struct ConnectionSettings: Equatable {
     var serverURL: String
     var model: String
     var apiKey: String

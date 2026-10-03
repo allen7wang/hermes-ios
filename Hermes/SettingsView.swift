@@ -110,12 +110,14 @@ struct SettingsView: View {
                 modelName = first
             }
             try model.saveSettings(saved)
+            model.recordConnectionTest(success: true)
             connected = true
             feedback = "连接成功，当前模型：\(saved.model)"
         } catch {
             // Preserve the address and key so the user can adjust the server and retry.
             do { try model.saveSettings(connection) }
             catch { feedback = error.localizedDescription; isTesting = false; return }
+            model.recordConnectionTest(success: false)
             feedback = error.localizedDescription
         }
         isTesting = false

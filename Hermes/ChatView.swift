@@ -1,10 +1,14 @@
 import SwiftUI
+import PhotosUI
 
 struct ChatView: View {
     @EnvironmentObject private var model: AppModel
     @State private var draft = ""
     @State private var showingHistory = false
     @State private var showingSettings = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var pendingImage: Data?
+    @State private var loadingPhoto = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,6 +22,12 @@ struct ChatView: View {
                             ForEach(conversation.messages) { message in
                                 MessageBubble(message: message)
                                     .id(message.id)
+                            }
+                            if !model.streamedReply.isEmpty {
+                                MessageBubble(message: ChatMessage(
+                                    role: .assistant,
+                                    content: model.streamedReply
+                                ))
                             }
                             if model.isSending { thinkingIndicator.id("thinking") }
                             else if conversation.messages.last?.role == .user {
@@ -52,6 +62,9 @@ struct ChatView: View {
                         withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .bottom) }
                     }
                 }
+                .onChange(of: model.streamedReply.count) { _, _ in
+                    if model.isSending { proxy.scrollTo("thinking", anchor: .bottom) }
+                }
             }
 
             composer
@@ -59,6 +72,23 @@ struct ChatView: View {
         .background(HermesTheme.background.ignoresSafeArea())
         .sheet(isPresented: $showingHistory) { HistoryView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .task { await model.checkConnection() }
+        .onChange(of: selectedPhoto) { _, item in
+            guard let item else { return }
+            loadingPhoto = true
+            Task {
+                do {
+                    guard let original = try await item.loadTransferable(type: Data.self) else {
+                        throw ImageAttachmentStore.ImageError.invalidImage
+                    }
+                    pendingImage = try ImageAttachmentStore.prepare(original)
+                } catch {
+                    model.errorMessage = error.localizedDescription
+                }
+                loadingPhoto = false
+                selectedPhoto = nil
+            }
+        }
         .alert("连接或发送失败", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
@@ -86,14 +116,23 @@ struct ChatView: View {
                         .tracking(2.2)
                 }
                 .font(.system(size: 15, weight: .bold, design: .rounded))
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(model.settings.isConfigured ? Color.green : HermesTheme.muted)
-                        .frame(width: 6, height: 6)
-                    Text(model.settings.isConfigured ? "已配置服务" : "等待连接")
-                        .font(.system(size: 11))
-                        .foregroundStyle(HermesTheme.muted)
+                Button {
+                    if model.settings.isConfigured {
+                        Task { await model.checkConnection() }
+                    } else {
+                        showingSettings = true
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(model.connectionState == .connected ? Color.green : HermesTheme.muted)
+                            .frame(width: 6, height: 6)
+                        Text(connectionLabel)
+                            .font(.system(size: 11))
+                            .foregroundStyle(HermesTheme.muted)
+                    }
                 }
+                .accessibilityLabel("连接状态：\(connectionLabel)，点按重新检测")
             }
             Spacer()
             Button { model.newConversation() } label: {
@@ -113,6 +152,15 @@ struct ChatView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
+    }
+
+    private var connectionLabel: String {
+        switch model.connectionState {
+        case .unconfigured: "等待连接"
+        case .checking: "正在检测"
+        case .connected: "已连接"
+        case .offline: "连接失败"
+        }
     }
 
     private var welcome: some View {
@@ -187,9 +235,11 @@ struct ChatView: View {
     private var thinkingIndicator: some View {
         HStack(spacing: 10) {
             ProgressView().tint(HermesTheme.accent)
-            Text("Hermes 正在思考…")
+            Text(model.toolStatus ?? (model.streamedReply.isEmpty
+                                      ? "Hermes 正在思考…" : "正在生成回复…"))
                 .font(.system(size: 13))
                 .foregroundStyle(HermesTheme.muted)
+                .lineLimit(1)
             Spacer()
             Button("停止") { model.cancelSend() }
                 .font(.system(size: 13))
@@ -199,39 +249,76 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("给 Hermes 发送消息…", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .font(.system(size: 15))
-                .tint(HermesTheme.accent)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 13)
-                .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 20))
-                .accessibilityLabel("消息内容")
-
-            Button {
-                let message = draft
-                if model.settings.isConfigured {
-                    draft = ""
-                    model.send(message)
-                } else {
-                    showingSettings = true
+        VStack(alignment: .leading, spacing: 10) {
+            if let pendingImage, let preview = UIImage(data: pendingImage) {
+                ZStack(alignment: .topTrailing) {
+                    Image(uiImage: preview)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 110, maxHeight: 110)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Button {
+                        self.pendingImage = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 23))
+                            .foregroundStyle(.white, .black.opacity(0.7))
+                    }
+                    .accessibilityLabel("移除图片")
                 }
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(HermesTheme.background)
-                    .frame(width: 44, height: 44)
-                    .background(HermesTheme.accent, in: Circle())
             }
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isSending)
-            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isSending ? 0.45 : 1)
-            .accessibilityLabel("发送")
+            HStack(alignment: .bottom, spacing: 10) {
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Group {
+                        if loadingPhoto { ProgressView().tint(HermesTheme.accent) }
+                        else { Image(systemName: "photo.badge.plus") }
+                    }
+                    .font(.system(size: 21))
+                    .foregroundStyle(HermesTheme.accent)
+                    .frame(width: 38, height: 44)
+                }
+                .disabled(model.isSending || loadingPhoto)
+                .accessibilityLabel("添加图片")
+
+                TextField("给 Hermes 发送消息…", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .font(.system(size: 15))
+                    .tint(HermesTheme.accent)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 13)
+                    .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 20))
+                    .accessibilityLabel("消息内容")
+
+                Button {
+                    if model.settings.isConfigured {
+                        if model.send(draft, imageData: pendingImage) {
+                            draft = ""
+                            pendingImage = nil
+                        }
+                    } else {
+                        showingSettings = true
+                    }
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(HermesTheme.background)
+                        .frame(width: 44, height: 44)
+                        .background(HermesTheme.accent, in: Circle())
+                }
+                .disabled(!canSend)
+                .opacity(canSend ? 1 : 0.45)
+                .accessibilityLabel("发送")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 10)
         .background(HermesTheme.background)
+    }
+
+    private var canSend: Bool {
+        (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || pendingImage != nil)
+            && !model.isSending && !loadingPhoto
     }
 }
 
@@ -247,16 +334,28 @@ private struct MessageBubble: View {
                     .foregroundStyle(HermesTheme.accent)
                     .frame(width: 28, height: 28)
             }
-            Text(.init(message.content))
-                .font(.system(size: 15))
-                .lineSpacing(4)
-                .textSelection(.enabled)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 12)
-                .background(
-                    message.role == .user ? HermesTheme.raised : HermesTheme.surface,
-                    in: RoundedRectangle(cornerRadius: 18)
-                )
+            VStack(alignment: .leading, spacing: 10) {
+                if let imageID = message.imageID,
+                   let image = ImageAttachmentStore.image(imageID) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 240, maxHeight: 280)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                if !message.content.isEmpty {
+                    Text(.init(message.content))
+                        .font(.system(size: 15))
+                        .lineSpacing(4)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 12)
+            .background(
+                message.role == .user ? HermesTheme.raised : HermesTheme.surface,
+                in: RoundedRectangle(cornerRadius: 18)
+            )
             if message.role == .assistant { Spacer(minLength: 24) }
         }
         .foregroundStyle(.white)
