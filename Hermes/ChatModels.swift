@@ -27,6 +27,9 @@ struct Conversation: Identifiable, Codable, Equatable {
     var messages: [ChatMessage]
     var updatedAt: Date
     var profileID: UUID?
+    var pinned: Bool?
+
+    var isPinned: Bool { pinned == true }
 }
 
 struct ConnectionSettings: Hashable {

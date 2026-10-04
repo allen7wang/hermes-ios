@@ -35,9 +35,18 @@ struct HistoryView: View {
                                 dismiss()
                             } label: {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text(conversation.title)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .lineLimit(1)
+                                    HStack {
+                                        if conversation.isPinned {
+                                            Image(systemName: "pin.fill").foregroundStyle(HermesTheme.accent)
+                                                .accessibilityLabel("已置顶")
+                                        }
+                                        Text(conversation.title)
+                                            .font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                                    }
+                                    if let last = conversation.messages.last {
+                                        Text(last.content.isEmpty && last.imageID != nil ? "[图片]" : last.content)
+                                            .font(.caption).foregroundStyle(HermesTheme.muted).lineLimit(2)
+                                    }
                                     Text(conversation.updatedAt, style: .date)
                                         .font(.system(size: 12))
                                         .foregroundStyle(HermesTheme.muted)
@@ -54,7 +63,16 @@ struct HistoryView: View {
                                     model.delete(conversation.id)
                                 }
                             }
+                            .swipeActions(edge: .leading) {
+                                Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: "pin") {
+                                    model.togglePin(conversation.id)
+                                }
+                                .tint(HermesTheme.accent)
+                            }
                             .contextMenu {
+                                Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: conversation.isPinned ? "pin.slash" : "pin") {
+                                    model.togglePin(conversation.id)
+                                }
                                 Button("重命名", systemImage: "pencil") {
                                     newTitle = conversation.title
                                     renamingID = conversation.id

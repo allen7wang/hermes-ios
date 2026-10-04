@@ -14,10 +14,12 @@ struct ToolProgress: Decodable {
 
 struct HermesClient {
     let settings: ConnectionSettings
+    let attachmentDirectory: URL?
     let sessionConfiguration: URLSessionConfiguration
 
-    init(settings: ConnectionSettings, sessionConfiguration: URLSessionConfiguration = .ephemeral) {
+    init(settings: ConnectionSettings, sessionConfiguration: URLSessionConfiguration = .ephemeral, attachmentDirectory: URL? = nil) {
         self.settings = settings
+        self.attachmentDirectory = attachmentDirectory
         self.sessionConfiguration = sessionConfiguration
     }
 
@@ -232,7 +234,7 @@ struct HermesClient {
         request.httpBody = try JSONEncoder().encode(
             CompletionRequest(
                 model: settings.model.isEmpty ? "hermes-agent" : settings.model,
-                messages: try messages.map(CompletionMessage.init),
+                messages: try messages.map { try CompletionMessage($0, directory: attachmentDirectory) },
                 stream: true
             )
         )
@@ -362,10 +364,10 @@ private struct CompletionMessage: Encodable {
     let role: String
     let content: Content
 
-    init(_ message: ChatMessage) throws {
+    init(_ message: ChatMessage, directory: URL? = nil) throws {
         role = message.role.rawValue
         if let imageID = message.imageID {
-            let image = try ImageAttachmentStore.load(imageID)
+            let image = try ImageAttachmentStore.load(imageID, directory: directory)
             let imageURL = "data:image/jpeg;base64," + image.base64EncodedString()
             var parts: [Part] = []
             if !message.content.isEmpty { parts.append(.text(message.content)) }

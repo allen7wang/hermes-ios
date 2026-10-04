@@ -13,6 +13,7 @@ end
 target = project.targets.find { |item| item.name == 'Hermes' } || project.new_target(:application, 'Hermes', :ios, '17.0')
 group = project.main_group.find_subpath('Hermes', false) || project.main_group.new_group('Hermes', 'Hermes')
 Dir.glob(File.join(root, 'Hermes', '*.swift')).sort.each do |file|
+  next unless File.basename(file).match?(/\A[A-Za-z_][A-Za-z0-9_]*\.swift\z/)
   reference = group.files.find { |item| item.path == File.basename(file) } || group.new_file(File.basename(file))
   target.source_build_phase.add_file_reference(reference) unless target.source_build_phase.files_references.include?(reference)
 end
@@ -30,7 +31,7 @@ target.build_configurations.each do |configuration|
   settings['INFOPLIST_FILE'] = 'Hermes/Info.plist'
   settings['GENERATE_INFOPLIST_FILE'] = 'NO'
   settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
-  settings['MARKETING_VERSION'] = '0.5.0'
+  settings['MARKETING_VERSION'] = '0.6.0'
   settings['CURRENT_PROJECT_VERSION'] = '1'
   settings['CODE_SIGN_STYLE'] = 'Automatic'
   settings['ENABLE_PREVIEWS'] = 'YES'
@@ -40,6 +41,7 @@ tests = project.targets.find { |item| item.name == 'HermesTests' } || project.ne
 tests.add_dependency(target) unless tests.dependencies.any? { |item| item.target == target }
 test_group = project.main_group.find_subpath('HermesTests', false) || project.main_group.new_group('HermesTests', 'HermesTests')
 Dir.glob(File.join(root, 'HermesTests', '*.swift')).sort.each do |file|
+  next unless File.basename(file).match?(/\A[A-Za-z_][A-Za-z0-9_]*\.swift\z/)
   reference = test_group.files.find { |item| item.path == File.basename(file) } || test_group.new_file(File.basename(file))
   tests.source_build_phase.add_file_reference(reference) unless tests.source_build_phase.files_references.include?(reference)
 end

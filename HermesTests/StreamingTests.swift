@@ -288,6 +288,7 @@ final class StreamingTests: XCTestCase {
         XCTAssertEqual(model.draft, "未配置时保留")
         _ = try model.saveProfile(id: home, name: "家中", connection: makeClient().settings)
         let sentKey = model.draftKey
+        let beforeSendingBackup = try model.makeBackup()
         MockURLProtocol.chunks = ["data: {\"choices\":[{\"delta\":{\"content\":\"回复\"},\"finish_reason\":null}]}\n\n", "data: [DONE]\n\n"]
         XCTAssertTrue(model.send(model.draft))
         XCTAssertEqual(model.draft, "")
@@ -295,6 +296,9 @@ final class StreamingTests: XCTestCase {
         model.selectProfile(work)
         XCTAssertEqual(model.activeProfileID, home)
         XCTAssertThrowsError(try model.removeProfile(work))
+        XCTAssertThrowsError(try model.makeBackup())
+        XCTAssertThrowsError(try model.previewImport(beforeSendingBackup))
+        XCTAssertThrowsError(try model.importBackup(beforeSendingBackup))
         XCTAssertThrowsError(try model.saveProfile(id: work, name: "不能修改", connection: makeClient().settings))
         // Wait for the mocked network stream with a bounded deadline.
         for _ in 0..<200 where model.isSending { try await Task.sleep(nanoseconds: 10_000_000) }

@@ -67,6 +67,13 @@ struct SettingsView: View {
                         .listRowBackground(HermesTheme.surface)
                 }
 
+                Section {
+                    NavigationLink { BackupView() } label: {
+                        Label("备份与恢复", systemImage: "externaldrive")
+                    }
+                }
+                .listRowBackground(HermesTheme.surface)
+
                 Section("在 Mac 上启用") {
                     Text("在 ~/.hermes/.env 中设置 API_SERVER_ENABLED=true 和 API_SERVER_KEY，然后运行 hermes gateway。默认服务端口是 8642。填写手机可访问的地址，远程连接使用 HTTPS。")
                         .font(.footnote).textSelection(.enabled)

@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 enum ImageAttachmentStore {
-    private static var directory: URL {
+    private static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Attachments", isDirectory: true)
     }
@@ -24,27 +24,26 @@ enum ImageAttachmentStore {
         return smaller
     }
 
-    static func save(_ jpeg: Data) throws -> UUID {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let id = UUID()
-        try jpeg.write(to: fileURL(for: id), options: [.atomic, .completeFileProtectionUnlessOpen])
+    static func save(_ jpeg: Data, id: UUID = UUID(), directory: URL? = nil) throws -> UUID {
+        try FileManager.default.createDirectory(at: directory ?? defaultDirectory, withIntermediateDirectories: true)
+        try jpeg.write(to: fileURL(for: id, directory: directory), options: [.atomic, .completeFileProtectionUnlessOpen])
         return id
     }
 
-    static func load(_ id: UUID) throws -> Data {
-        try Data(contentsOf: fileURL(for: id))
+    static func load(_ id: UUID, directory: URL? = nil) throws -> Data {
+        try Data(contentsOf: fileURL(for: id, directory: directory))
     }
 
     static func image(_ id: UUID) -> UIImage? {
         UIImage(contentsOfFile: fileURL(for: id).path)
     }
 
-    static func remove(_ id: UUID) {
-        try? FileManager.default.removeItem(at: fileURL(for: id))
+    static func remove(_ id: UUID, directory: URL? = nil) {
+        try? FileManager.default.removeItem(at: fileURL(for: id, directory: directory))
     }
 
-    private static func fileURL(for id: UUID) -> URL {
-        directory.appendingPathComponent(id.uuidString).appendingPathExtension("jpg")
+    static func fileURL(for id: UUID, directory: URL? = nil) -> URL {
+        (directory ?? defaultDirectory).appendingPathComponent(id.uuidString).appendingPathExtension("jpg")
     }
 
     enum ImageError: LocalizedError {

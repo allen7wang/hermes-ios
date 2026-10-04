@@ -23,6 +23,18 @@ final class DraftStore {
         "\(settings.profileID?.uuidString ?? settings.serverURL)/remote/\(sessionID)"
     }
 
+    var isReadable: Bool { loadError == nil }
+
+    func snapshot() throws -> [String: String] {
+        if let loadError { throw loadError }
+        return values
+    }
+
+    func reload() throws {
+        values = try JSONDecoder().decode([String: String].self, from: Data(contentsOf: url))
+        loadError = nil
+    }
+
     func text(for key: String) -> String { values[key] ?? "" }
 
     func set(_ text: String, for key: String) throws {

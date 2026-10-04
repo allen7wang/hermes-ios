@@ -28,6 +28,9 @@ final class AppModel: ObservableObject {
 
     private var activeTask: Task<Void, Never>?
     private let conversationsURL: URL
+    private let directory: URL
+    private let recoveryProfileID = UUID()
+    private let installationID: UUID
     private let defaults: UserDefaults
     private let credentials: CredentialStore
     private let sessionConfiguration: URLSessionConfiguration
@@ -38,6 +41,10 @@ final class AppModel: ObservableObject {
 
     var activeProfileName: String { profiles.first { $0.id == activeProfileID }?.name ?? "Hermes" }
     var draftKey: String { DraftStore.localKey(profileID: activeProfileID, conversationID: selectedID) }
+
+    var needsRecovery: Bool { storageLoadFailed || !draftStore.isReadable }
+
+    var attachmentDirectory: URL { directory.appendingPathComponent("Attachments", isDirectory: true) }
 
     var selectedConversation: Conversation? {
         conversations.first { $0.id == selectedID }
@@ -51,10 +58,19 @@ final class AppModel: ObservableObject {
         self.sessionConfiguration = sessionConfiguration
         let directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        self.directory = directory
         conversationsURL = directory.appendingPathComponent("conversations.json")
+        let installation = defaults.string(forKey: "installationID").flatMap(UUID.init(uuidString:)) ?? UUID()
+        installationID = installation
+        defaults.set(installation.uuidString, forKey: "installationID")
+        var recoveryError: Error?
+        do { try BackupRestoreTransaction.recover(directory: directory, defaults: defaults) }
+        catch { recoveryError = error }
         draftStore = DraftStore(directory: directory)
 
-        let libraryData = defaults.data(forKey: "connectionLibrary")
+        let libraryURL = directory.appendingPathComponent("connections.json")
+        let libraryFileExists = FileManager.default.fileExists(atPath: libraryURL.path)
+        let libraryData = libraryFileExists ? try? Data(contentsOf: libraryURL) : defaults.data(forKey: "connectionLibrary")
         let library = libraryData.flatMap { try? JSONDecoder().decode(ConnectionLibrary.self, from: $0) }
         let legacy = ConnectionProfile(id: ConnectionProfile.legacyID, name: "默认连接",
                                        serverURL: defaults.string(forKey: "serverURL") ?? "",
@@ -66,7 +82,8 @@ final class AppModel: ObservableObject {
         settings = active.settings(apiKey: credentials.read(account: active.credentialAccount))
         selectedConversations = library?.selectedConversations ?? [:]
         connectionState = settings.isConfigured ? .checking : .unconfigured
-        if libraryData != nil && (library == nil || library!.profiles.isEmpty) {
+        if recoveryError != nil || (libraryFileExists && libraryData == nil) ||
+            (libraryData != nil && (library == nil || library!.profiles.isEmpty)) {
             storageLoadFailed = true
             errorMessage = ProfileError.storageUnavailable.localizedDescription
         }
@@ -133,10 +150,9 @@ final class AppModel: ObservableObject {
         guard let profile = profiles.first(where: { $0.id == id }) else { return }
         try credentials.save("", account: profile.credentialAccount)
         try draftStore.remove(profileID: id)
-        for imageID in allConversations.filter({ $0.profileID == id }).flatMap({ $0.messages.compactMap(\.imageID) }) {
-            ImageAttachmentStore.remove(imageID)
-        }
+        let removedImages = Set(allConversations.filter({ $0.profileID == id }).flatMap({ $0.messages.compactMap(\.imageID) }))
         allConversations.removeAll { $0.profileID == id }
+        removeUnusedImages(removedImages)
         profiles.removeAll { $0.id == id }
         selectedConversations[id.uuidString] = nil
         if profiles.isEmpty { profiles = [ConnectionProfile(name: "默认连接", serverURL: "", model: "hermes-agent")] }
@@ -172,7 +188,11 @@ final class AppModel: ObservableObject {
         guard !storageLoadFailed else { return }
         let library = ConnectionLibrary(profiles: profiles, activeID: activeProfileID,
                                         selectedConversations: selectedConversations)
-        if let data = try? JSONEncoder().encode(library) { defaults.set(data, forKey: "connectionLibrary") }
+        do {
+            let data = try JSONEncoder().encode(library)
+            try data.write(to: directory.appendingPathComponent("connections.json"), options: .atomic)
+            defaults.set(data, forKey: "connectionLibrary")
+        } catch { errorMessage = "连接保存失败：\(error.localizedDescription)" }
     }
 
     func checkConnection() async {
@@ -209,12 +229,9 @@ final class AppModel: ObservableObject {
 
     func delete(_ id: UUID) {
         guard !isSending, !storageLoadFailed else { return }
-        if let conversation = conversations.first(where: { $0.id == id }) {
-            for imageID in conversation.messages.compactMap(\.imageID) {
-                ImageAttachmentStore.remove(imageID)
-            }
-        }
+        let removedImages = Set(conversations.first(where: { $0.id == id })?.messages.compactMap(\.imageID) ?? [])
         allConversations.removeAll { $0.id == id && $0.profileID == activeProfileID }
+        removeUnusedImages(removedImages)
         do { try draftStore.set("", for: DraftStore.localKey(profileID: activeProfileID, conversationID: id)) }
         catch { errorMessage = error.localizedDescription }
         refreshConversations()
@@ -224,9 +241,81 @@ final class AppModel: ObservableObject {
 
     func rename(_ id: UUID, to rawTitle: String) {
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !storageLoadFailed, !title.isEmpty, let index = allConversations.firstIndex(where: { $0.id == id }) else { return }
+        guard !storageLoadFailed, !title.isEmpty, let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID }) else { return }
         allConversations[index].title = String(title.prefix(80))
         persist()
+    }
+
+    func togglePin(_ id: UUID) {
+        guard !storageLoadFailed, !isSending,
+              let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID }) else { return }
+        allConversations[index].pinned = !allConversations[index].isPinned
+        persist()
+    }
+
+    func makeBackup() throws -> BackupArchive {
+        guard !isSending else { throw ProfileError.sending }
+        guard !storageLoadFailed else { throw ProfileError.storageUnavailable }
+        var images: [String: Data] = [:]
+        var imageBytes = 0
+        for id in Set(allConversations.flatMap { $0.messages.compactMap(\.imageID) }) {
+            let data: Data
+            do { data = try ImageAttachmentStore.load(id, directory: attachmentDirectory) }
+            catch { throw BackupError.missingImage }
+            imageBytes += data.count
+            guard imageBytes <= BackupArchive.byteLimit / 4 * 3 else { throw BackupError.tooLarge }
+            images[id.uuidString] = data
+        }
+        let archive = BackupArchive(installationID: installationID, createdAt: Date(), profiles: profiles,
+                                    conversations: allConversations, drafts: try draftStore.snapshot(), images: images)
+        try archive.validate()
+        return archive
+    }
+
+    func previewImport(_ archive: BackupArchive) throws -> BackupImportReport {
+        try prepareImport(archive).report
+    }
+
+    @discardableResult
+    func importBackup(_ archive: BackupArchive) throws -> BackupImportReport {
+        let recovering = needsRecovery
+        let merge = try prepareImport(archive)
+        do {
+            if recovering { try BackupRestoreTransaction.preserveOriginals(directory: directory, defaults: defaults) }
+            try BackupRestoreTransaction.commit(merge.state, directory: directory, defaults: defaults)
+            try draftStore.reload()
+        } catch {
+            // The journal is preserved for retry on next launch. Block further writes until recovery.
+            storageLoadFailed = true
+            errorMessage = "恢复未完成，原记录已保留。请重新打开 App 重试。"
+            throw error
+        }
+        storageLoadFailed = false
+        profiles = merge.state.library.profiles
+        allConversations = merge.state.conversations
+        if recovering {
+            activeProfileID = merge.state.library.activeID
+            selectedConversations = merge.state.library.selectedConversations
+            selectedID = nil
+            settings = profiles[0].settings(apiKey: credentials.read(account: profiles[0].credentialAccount))
+            connectionState = .unconfigured
+        }
+        errorMessage = nil
+        refreshConversations()
+        draft = draftStore.text(for: draftKey)
+        return merge.report
+    }
+
+    private func prepareImport(_ archive: BackupArchive) throws -> BackupMerge {
+        guard !isSending else { throw ProfileError.sending }
+        if needsRecovery {
+            let empty = ConnectionProfile(id: recoveryProfileID, name: "默认连接", serverURL: "", model: "hermes-agent")
+            return try BackupMerge.prepare(archive, installationID: installationID,
+                library: ConnectionLibrary(profiles: [empty], activeID: empty.id), conversations: [], drafts: [:])
+        }
+        return try BackupMerge.prepare(archive, installationID: installationID,
+            library: ConnectionLibrary(profiles: profiles, activeID: activeProfileID, selectedConversations: selectedConversations),
+            conversations: allConversations, drafts: draftStore.snapshot())
     }
 
     func cancelSend() {
@@ -257,7 +346,7 @@ final class AppModel: ObservableObject {
 
         var imageID: UUID?
         if let imageData {
-            do { imageID = try ImageAttachmentStore.save(imageData) }
+            do { imageID = try ImageAttachmentStore.save(imageData, directory: attachmentDirectory) }
             catch {
                 errorMessage = error.localizedDescription
                 return false
@@ -272,7 +361,7 @@ final class AppModel: ObservableObject {
             selectedID = conversation.id
         }
         guard let selectedID, let index = allConversations.firstIndex(where: { $0.id == selectedID }) else {
-            if let imageID { ImageAttachmentStore.remove(imageID) }
+            if let imageID { ImageAttachmentStore.remove(imageID, directory: attachmentDirectory) }
             return false
         }
         allConversations[index].messages.append(
@@ -304,7 +393,7 @@ final class AppModel: ObservableObject {
                 toolStatus = nil
             }
             do {
-                let reply = try await HermesClient(settings: connection, sessionConfiguration: sessionConfiguration).stream(
+                let reply = try await HermesClient(settings: connection, sessionConfiguration: sessionConfiguration, attachmentDirectory: attachmentDirectory).stream(
                     messages: history
                 ) { event in
                     await MainActor.run {
@@ -341,9 +430,17 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func removeUnusedImages(_ candidates: Set<UUID>) {
+        let retained = Set(allConversations.flatMap { $0.messages.compactMap(\.imageID) })
+        for id in candidates.subtracting(retained) { ImageAttachmentStore.remove(id, directory: attachmentDirectory) }
+    }
+
     private func refreshConversations() {
         conversations = allConversations.filter { $0.profileID == activeProfileID }
-            .sorted { $0.updatedAt > $1.updatedAt }
+            .sorted {
+                if $0.isPinned != $1.isPinned { return $0.isPinned }
+                return $0.updatedAt > $1.updatedAt
+            }
     }
 
     private func persist() {
