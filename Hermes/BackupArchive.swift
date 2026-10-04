@@ -13,6 +13,8 @@ struct BackupArchive: Codable {
     var drafts: [String: String]
     var images: [String: Data]
 
+    var bookmarkCount: Int { conversations.reduce(0) { $0 + $1.messages.filter { $0.bookmark != nil }.count } }
+
     static func read(from url: URL) throws -> BackupArchive {
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }
@@ -39,7 +41,7 @@ struct BackupArchive: Codable {
 
     func validate() throws {
         guard format == "hermes-ios-backup" else { throw BackupError.invalidFile }
-        guard version == 1 else { throw BackupError.unsupportedVersion }
+        guard (1...2).contains(version) else { throw BackupError.unsupportedVersion }
         guard !profiles.isEmpty, profiles.count <= 100,
               conversations.count <= 5_000,
               conversations.reduce(0, { $0 + $1.messages.count }) <= 100_000,
@@ -57,6 +59,12 @@ struct BackupArchive: Codable {
                   Set(conversation.messages.map(\.id)).count == conversation.messages.count else { throw BackupError.invalidFile }
             conversationProfiles[conversation.id] = profileID
             referencedImages.formUnion(conversation.messages.compactMap { $0.imageID?.uuidString })
+            for message in conversation.messages {
+                if let bookmark = message.bookmark {
+                    guard version >= 2, bookmark.note.count <= MessageBookmark.noteLimit,
+                          bookmark.createdAt.timeIntervalSince1970.isFinite else { throw BackupError.invalidFile }
+                }
+            }
         }
         guard Set(images.keys) == referencedImages else { throw BackupError.missingImage }
         for (key, data) in images {

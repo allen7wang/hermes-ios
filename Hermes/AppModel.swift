@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var activeProfileID: UUID
     @Published var draft = "" {
         didSet {
+            guard !draftAlreadyPersisted else { return }
             do { try draftStore.set(draft, for: draftKey) }
             catch { errorMessage = "草稿保存失败：\(error.localizedDescription)" }
         }
@@ -35,6 +36,7 @@ final class AppModel: ObservableObject {
     private let credentials: CredentialStore
     private let sessionConfiguration: URLSessionConfiguration
     private var storageLoadFailed = false
+    private var draftAlreadyPersisted = false
     private var allConversations: [Conversation] = []
     private var selectedConversations: [String: String] = [:]
     let draftStore: DraftStore
@@ -253,6 +255,60 @@ final class AppModel: ObservableObject {
         persist()
     }
 
+    func libraryItem(_ target: LocalMessageTarget) -> MessageLibraryItem? {
+        guard let conversation = conversations.first(where: { $0.id == target.conversationID }),
+              let message = conversation.messages.first(where: { $0.id == target.messageID }) else { return nil }
+        return MessageLibraryItem(id: target, conversationTitle: conversation.title, message: message)
+    }
+
+    func toggleBookmark(_ target: LocalMessageTarget) throws {
+        try changeBookmark(target) { current in
+            current == nil ? MessageBookmark(createdAt: Date(), note: "") : nil
+        }
+    }
+
+    func updateBookmarkNote(_ target: LocalMessageTarget, note: String) throws {
+        let note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard note.count <= MessageBookmark.noteLimit else { throw MessageLibraryError.noteTooLong }
+        try changeBookmark(target) { current in
+            guard var current else { throw MessageLibraryError.notBookmarked }
+            current.note = note
+            return current
+        }
+    }
+
+    private func changeBookmark(_ target: LocalMessageTarget, transform: (MessageBookmark?) throws -> MessageBookmark?) throws {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard let index = allConversations.firstIndex(where: { $0.id == target.conversationID && $0.profileID == activeProfileID }),
+              let messageIndex = allConversations[index].messages.firstIndex(where: { $0.id == target.messageID }) else {
+            throw MessageLibraryError.missing
+        }
+        var candidate = allConversations
+        candidate[index].messages[messageIndex].bookmark = try transform(candidate[index].messages[messageIndex].bookmark)
+        // Persist before publishing: a failed write must not show a successful star or note.
+        try JSONEncoder().encode(candidate).write(to: conversationsURL, options: .atomic)
+        allConversations = candidate
+        refreshConversations()
+    }
+
+    func openMessage(_ target: LocalMessageTarget) throws {
+        guard !isSending else { throw MessageLibraryError.busy }
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard libraryItem(target) != nil else { throw MessageLibraryError.missing }
+        select(target.conversationID)
+    }
+
+    func quoteMessage(_ target: LocalMessageTarget) throws {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard let item = libraryItem(target) else { throw MessageLibraryError.missing }
+        let next = (draft.isEmpty ? "" : draft + "\n\n") + MessageLibrary.quote(item) + "\n\n"
+        guard next.count <= 100_000 else { throw MessageLibraryError.draftTooLong }
+        try draftStore.set(next, for: draftKey)
+        draftAlreadyPersisted = true
+        defer { draftAlreadyPersisted = false }
+        draft = next
+    }
+
     func makeBackup() throws -> BackupArchive {
         guard !isSending else { throw ProfileError.sending }
         guard !storageLoadFailed else { throw ProfileError.storageUnavailable }
@@ -266,8 +322,9 @@ final class AppModel: ObservableObject {
             guard imageBytes <= BackupArchive.byteLimit / 4 * 3 else { throw BackupError.tooLarge }
             images[id.uuidString] = data
         }
-        let archive = BackupArchive(installationID: installationID, createdAt: Date(), profiles: profiles,
+        var archive = BackupArchive(installationID: installationID, createdAt: Date(), profiles: profiles,
                                     conversations: allConversations, drafts: try draftStore.snapshot(), images: images)
+        if archive.bookmarkCount > 0 { archive.version = 2 }
         try archive.validate()
         return archive
     }
@@ -514,6 +571,19 @@ final class AppModel: ObservableObject {
             case .sending: "请等待回复完成或停止后，再修改连接。"
             case .missingName: "请填写连接名称。"
             case .missingKey: "请填写 API 密钥。"
+            }
+        }
+    }
+
+    enum MessageLibraryError: LocalizedError {
+        case missing, busy, noteTooLong, notBookmarked, draftTooLong
+        var errorDescription: String? {
+            switch self {
+            case .missing: "这条消息已删除或不属于当前连接。"
+            case .busy: "请先停止回复或等待完成，再回到原文。"
+            case .noteTooLong: "收藏备注最多 2,000 字符。"
+            case .notBookmarked: "这条消息尚未收藏，请先收藏后再添加备注。"
+            case .draftTooLong: "引用后草稿超过 100,000 字符，请先缩短草稿。"
             }
         }
     }

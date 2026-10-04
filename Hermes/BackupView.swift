@@ -28,7 +28,7 @@ struct BackupView: View {
             Section {
                 Label("将你的记录保存为备份", systemImage: "externaldrive.fill")
                     .foregroundStyle(HermesTheme.accent)
-                Text("包含所有连接的本机对话、图片和文字草稿，以及连接名称、地址和模型。")
+                Text("包含所有连接的本机对话、图片、文字草稿和消息收藏备注，以及连接名称、地址和模型。")
                     .font(.subheadline).foregroundStyle(HermesTheme.muted)
             }
             .listRowBackground(HermesTheme.surface)
@@ -61,6 +61,8 @@ struct BackupView: View {
                     LabeledContent("连接", value: "\(archive.profiles.count) 个")
                     LabeledContent("本机对话", value: "\(archive.conversations.count) 段")
                     LabeledContent("图片", value: "\(archive.images.count) 张")
+                    LabeledContent("收藏消息", value: "\(archive.bookmarkCount) 条")
+                    if archive.version >= 2 { Text("含消息收藏的备份需 Hermes iOS v0.9.0 或更新版本导入。").font(.footnote).foregroundStyle(HermesTheme.muted) }
                     Text(preview.description).font(.subheadline)
                     Text(model.needsRecovery
                          ? "本机数据无法读取。恢复前会在设备上保留原文件副本，再用备份恢复记录。新导入的连接需要重新填写密钥。"

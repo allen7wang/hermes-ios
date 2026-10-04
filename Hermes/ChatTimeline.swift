@@ -5,12 +5,18 @@ enum TimelineAnchor: Hashable {
     case bottom
 }
 
+struct TimelineJumpRequest: Equatable, Hashable {
+    let id = UUID()
+    let contextID: String
+    let messageID: String
+}
+
 /// Reading older messages or jumping to a result pauses following the live reply.
 /// The explicit button returns to the bottom and resumes following.
 struct ChatTimeline<Content: View>: View {
     let contextID: String
     let updateToken: String
-    @Binding var jumpID: String?
+    @Binding var jumpRequest: TimelineJumpRequest?
     @ViewBuilder let content: (ScrollViewProxy, @escaping () -> Void) -> Content
     @State private var followsLatest = true
 
@@ -37,20 +43,22 @@ struct ChatTimeline<Content: View>: View {
                     .tint(HermesTheme.accent).padding(12)
                 }
             }
-            .task(id: contextID) {
-                followsLatest = true
+            .task(id: positionID) {
+                let request = jumpRequest?.contextID == contextID ? jumpRequest : nil
+                followsLatest = request == nil
                 await Task.yield()
-                proxy.scrollTo(TimelineAnchor.bottom, anchor: .bottom)
+                guard !Task.isCancelled else { return }
+                if let request { proxy.scrollTo(TimelineAnchor.message(request.messageID), anchor: .top) }
+                else { proxy.scrollTo(TimelineAnchor.bottom, anchor: .bottom) }
             }
             .onChange(of: updateToken) { _, _ in
                 if followsLatest { proxy.scrollTo(TimelineAnchor.bottom, anchor: .bottom) }
             }
-            .onChange(of: jumpID) { _, id in
-                guard let id else { return }
-                followsLatest = false
-                withAnimation { proxy.scrollTo(TimelineAnchor.message(id), anchor: .top) }
-                jumpID = nil
-            }
         }
+    }
+
+    private var positionID: String {
+        if let request = jumpRequest, request.contextID == contextID { return contextID + "/" + request.id.uuidString }
+        return contextID + "/latest"
     }
 }

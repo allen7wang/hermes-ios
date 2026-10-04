@@ -10,8 +10,7 @@ struct RemoteSessionDetailView: View {
     @State private var busy = false
     @State private var showingSearch = false
     @State private var searchSelection: String?
-    @State private var jumpID: String?
-    @State private var highlightedID: String?
+    @State private var jumpRequest: TimelineJumpRequest?
 
     init(session: RemoteSession, client: HermesClient, draftStore: DraftStore, onChange: @escaping () -> Void) {
         _conversation = StateObject(wrappedValue: RemoteConversationModel(session: session, client: client, draftStore: draftStore))
@@ -20,7 +19,7 @@ struct RemoteSessionDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatTimeline(contextID: conversation.session.id, updateToken: timelineToken, jumpID: $jumpID) { proxy, pauseFollow in
+            ChatTimeline(contextID: conversation.session.id, updateToken: timelineToken, jumpRequest: $jumpRequest) { proxy, pauseFollow in
                 LazyVStack(alignment: .leading, spacing: 14) {
                     if conversation.isLoading { ProgressView("正在读取消息…") }
                     if conversation.hasOlderMessages {
@@ -107,7 +106,7 @@ struct RemoteSessionDetailView: View {
             }
         }
         .sheet(isPresented: $showingSearch, onDismiss: {
-            if let searchSelection { highlightedID = searchSelection; jumpID = searchSelection }
+            if let searchSelection { jumpRequest = TimelineJumpRequest(contextID: conversation.session.id, messageID: searchSelection) }
             searchSelection = nil
         }) {
             MessageSearchView(entries: conversation.visibleMessages.map {
@@ -143,6 +142,10 @@ struct RemoteSessionDetailView: View {
         )) {
             Button("知道了", role: .cancel) { conversation.errorMessage = nil }
         } message: { Text(conversation.errorMessage ?? "") }
+    }
+
+    private var highlightedID: String? {
+        jumpRequest?.contextID == conversation.session.id ? jumpRequest?.messageID : nil
     }
 
     private var timelineToken: String {

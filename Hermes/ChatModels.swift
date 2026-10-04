@@ -11,14 +11,22 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     let content: String
     let createdAt: Date
     var imageID: UUID?
+    var bookmark: MessageBookmark?
 
-    init(id: UUID = UUID(), role: Role, content: String, createdAt: Date = Date(), imageID: UUID? = nil) {
+    init(id: UUID = UUID(), role: Role, content: String, createdAt: Date = Date(), imageID: UUID? = nil, bookmark: MessageBookmark? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.imageID = imageID
+        self.bookmark = bookmark
     }
+}
+
+struct MessageBookmark: Codable, Equatable {
+    static let noteLimit = 2_000
+    let createdAt: Date
+    var note: String
 }
 
 struct Conversation: Identifiable, Codable, Equatable {

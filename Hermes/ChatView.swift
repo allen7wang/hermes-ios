@@ -11,8 +11,11 @@ struct ChatView: View {
     @State private var loadingPhoto = false
     @State private var showingSearch = false
     @State private var searchSelection: String?
-    @State private var jumpID: String?
-    @State private var highlightedID: String?
+    @State private var jumpRequest: TimelineJumpRequest?
+    @State private var showingLibrary = false
+    @State private var librarySelection: LocalMessageTarget?
+    @State private var bookmarkNoteTarget: LocalMessageTarget?
+    @State private var composerNotice: String?
     @State private var editingMessage: ChatMessage?
 
     var body: some View {
@@ -20,7 +23,7 @@ struct ChatView: View {
             header
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
 
-            ChatTimeline(contextID: model.selectedID?.uuidString ?? "new", updateToken: timelineToken, jumpID: $jumpID) { _, _ in
+            ChatTimeline(contextID: model.selectedID?.uuidString ?? "new", updateToken: timelineToken, jumpRequest: $jumpRequest) { _, _ in
                 if let conversation = model.selectedConversation {
                     LazyVStack(spacing: 20) {
                         ForEach(conversation.messages) { message in
@@ -28,6 +31,20 @@ struct ChatView: View {
                                           highlighted: highlightedID == message.id.uuidString)
                                 .id(TimelineAnchor.message(message.id.uuidString))
                                 .contextMenu {
+                                    Button(message.bookmark == nil ? "收藏消息" : "取消收藏", systemImage: message.bookmark == nil ? "bookmark" : "bookmark.fill") {
+                                        performLocalAction { try model.toggleBookmark(LocalMessageTarget(conversationID: conversation.id, messageID: message.id)) }
+                                    }.disabled(model.needsRecovery)
+                                    if message.bookmark != nil {
+                                        Button("编辑收藏备注", systemImage: "note.text") {
+                                            bookmarkNoteTarget = LocalMessageTarget(conversationID: conversation.id, messageID: message.id)
+                                        }.disabled(model.needsRecovery)
+                                    }
+                                    Button("引用到草稿", systemImage: "text.quote") {
+                                        performLocalAction {
+                                            try model.quoteMessage(LocalMessageTarget(conversationID: conversation.id, messageID: message.id))
+                                            composerNotice = "已引用到当前草稿，尚未发送。"
+                                        }
+                                    }.disabled(model.needsRecovery)
                                     Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
                                         .disabled(message.content.isEmpty)
                                     ShareLink(item: message.content) { Label("分享文字", systemImage: "square.and.arrow.up") }
@@ -66,15 +83,32 @@ struct ChatView: View {
         .sheet(isPresented: $showingRemote) { RemoteWorkspaceView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .sheet(item: $editingMessage) { EditMessageView(message: $0) }
+        .sheet(item: $bookmarkNoteTarget) { target in
+            BookmarkNoteView(target: target, note: model.libraryItem(target)?.message.bookmark?.note ?? "")
+        }
+        .sheet(isPresented: $showingLibrary, onDismiss: {
+            if let target = librarySelection {
+                performLocalAction {
+                    try model.openMessage(target)
+                    jumpRequest = TimelineJumpRequest(contextID: target.conversationID.uuidString, messageID: target.messageID.uuidString)
+                }
+            }
+            librarySelection = nil
+        }) {
+            MessageLibraryView { target in librarySelection = target; showingLibrary = false }
+        }
         .sheet(isPresented: $showingSearch, onDismiss: {
-            if let searchSelection { highlightedID = searchSelection; jumpID = searchSelection }
+            if let searchSelection { jumpRequest = TimelineJumpRequest(contextID: model.selectedID?.uuidString ?? "new", messageID: searchSelection) }
             searchSelection = nil
         }) {
             MessageSearchView(entries: searchEntries, scope: "当前本机对话") { searchSelection = $0 }
         }
-        .onChange(of: model.selectedID) { _, _ in highlightedID = nil; jumpID = nil }
+        .onChange(of: model.selectedID) { _, id in
+            if jumpRequest?.contextID != id?.uuidString { jumpRequest = nil }
+        }
         .task(id: model.settings) { await model.checkConnection() }
         .onChange(of: model.draftKey) { _, _ in
+            composerNotice = nil
             pendingImage = nil
             selectedPhoto = nil
             loadingPhoto = false
@@ -99,7 +133,7 @@ struct ChatView: View {
                 selectedPhoto = nil
             }
         }
-        .alert("连接或发送失败", isPresented: Binding(
+        .alert("操作失败", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
         )) {
@@ -160,6 +194,7 @@ struct ChatView: View {
             }
             .accessibilityLabel("服务端会话与定时任务")
             Menu {
+                Button("本机消息库", systemImage: "books.vertical") { showingLibrary = true }
                 Button("查找消息", systemImage: "magnifyingglass") { showingSearch = true }
                     .disabled(model.selectedConversation?.messages.isEmpty != false)
                 Button("连接管理", systemImage: "slider.horizontal.3") { showingSettings = true }
@@ -168,11 +203,20 @@ struct ChatView: View {
                     .font(.system(size: 18))
                     .frame(width: 42, height: 42)
             }
-            .accessibilityLabel("查找消息与连接管理")
+            .accessibilityLabel("消息查找与连接管理")
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
+    }
+
+    private var highlightedID: String? {
+        jumpRequest?.contextID == model.selectedID?.uuidString ? jumpRequest?.messageID : nil
+    }
+
+    private func performLocalAction(_ action: () throws -> Void) {
+        do { try action() }
+        catch { model.errorMessage = error.localizedDescription }
     }
 
     private var timelineToken: String {
@@ -281,6 +325,14 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let composerNotice {
+                HStack {
+                    Text(composerNotice).font(.caption).foregroundStyle(HermesTheme.accent)
+                    Spacer()
+                    Button { self.composerNotice = nil } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("关闭引用提示")
+                }
+            }
             if let pendingImage, let preview = UIImage(data: pendingImage) {
                 ZStack(alignment: .topTrailing) {
                     Image(uiImage: preview)
@@ -323,6 +375,7 @@ struct ChatView: View {
                 Button {
                     if model.settings.isConfigured {
                         if model.send(model.draft, imageData: pendingImage) {
+                            composerNotice = nil
                             pendingImage = nil
                         }
                     } else {
@@ -367,7 +420,8 @@ private struct MessageBubble: View {
                     .frame(width: 28, height: 28)
             }
             VStack(alignment: .leading, spacing: 10) {
-                if highlighted { Label("查找结果", systemImage: "magnifyingglass").font(.caption).foregroundStyle(HermesTheme.accent) }
+                if highlighted { Label("定位消息", systemImage: "magnifyingglass").font(.caption).foregroundStyle(HermesTheme.accent) }
+                if message.bookmark != nil { Label("已收藏", systemImage: "bookmark.fill").font(.caption).foregroundStyle(HermesTheme.accent) }
                 if let imageID = message.imageID,
                    let image = ImageAttachmentStore.image(imageID, directory: attachmentDirectory) {
                     Image(uiImage: image)
