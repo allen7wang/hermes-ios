@@ -9,61 +9,53 @@ struct ChatView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var pendingImage: Data?
     @State private var loadingPhoto = false
+    @State private var showingSearch = false
+    @State private var searchSelection: String?
+    @State private var jumpID: String?
+    @State private var highlightedID: String?
+    @State private var editingMessage: ChatMessage?
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    if let conversation = model.selectedConversation {
-                        LazyVStack(spacing: 20) {
-                            ForEach(conversation.messages) { message in
-                                MessageBubble(message: message)
-                                    .id(message.id)
-                            }
-                            if !model.streamedReply.isEmpty {
-                                MessageBubble(message: ChatMessage(
-                                    role: .assistant,
-                                    content: model.streamedReply
-                                ))
-                            }
-                            if model.isSending { thinkingIndicator.id("thinking") }
-                            else if conversation.messages.last?.role == .user {
-                                Button {
-                                    model.retryLastResponse()
-                                } label: {
-                                    Label("重试回复", systemImage: "arrow.clockwise")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(HermesTheme.accent)
+            ChatTimeline(contextID: model.selectedID?.uuidString ?? "new", updateToken: timelineToken, jumpID: $jumpID) { _, _ in
+                if let conversation = model.selectedConversation {
+                    LazyVStack(spacing: 20) {
+                        ForEach(conversation.messages) { message in
+                            MessageBubble(message: message, attachmentDirectory: model.attachmentDirectory,
+                                          highlighted: highlightedID == message.id.uuidString)
+                                .id(TimelineAnchor.message(message.id.uuidString))
+                                .contextMenu {
+                                    Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
+                                        .disabled(message.content.isEmpty)
+                                    ShareLink(item: message.content) { Label("分享文字", systemImage: "square.and.arrow.up") }
+                                        .disabled(message.content.isEmpty)
+                                    Button("从这里创建分支", systemImage: "arrow.triangle.branch") {
+                                        _ = model.branchConversation(at: message.id)
+                                    }.disabled(model.isSending || model.needsRecovery)
+                                    if message.role == .user {
+                                        Button("修改后重新发送", systemImage: "pencil") { editingMessage = message }
+                                            .disabled(model.isSending || model.needsRecovery)
+                                    }
                                 }
-                                .padding(.top, 4)
-                            }
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 26)
-                        .padding(.bottom, 24)
-                    } else {
-                        welcome
-                            .frame(maxWidth: .infinity, minHeight: 480)
+                        if !model.streamedReply.isEmpty {
+                            MessageBubble(message: ChatMessage(role: .assistant, content: model.streamedReply),
+                                          attachmentDirectory: model.attachmentDirectory)
+                        }
+                        if model.isSending { thinkingIndicator }
+                        else if conversation.messages.last?.role == .user {
+                            Button { model.retryLastResponse() } label: {
+                                Label("生成回复", systemImage: "arrow.clockwise")
+                                    .font(.system(size: 13, weight: .medium)).foregroundStyle(HermesTheme.accent)
+                            }.padding(.top, 4)
+                        }
                     }
-                }
-                .defaultScrollAnchor(.bottom)
-                .onChange(of: model.selectedConversation?.messages.count) { _, _ in
-                    if let id = model.selectedConversation?.messages.last?.id {
-                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .bottom) }
-                    }
-                }
-                .onChange(of: model.isSending) { _, sending in
-                    if sending {
-                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("thinking", anchor: .bottom) }
-                    } else if let id = model.selectedConversation?.messages.last?.id {
-                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .bottom) }
-                    }
-                }
-                .onChange(of: model.streamedReply.count) { _, _ in
-                    if model.isSending { proxy.scrollTo("thinking", anchor: .bottom) }
+                    .padding(.horizontal, 18).padding(.top, 26).padding(.bottom, 24)
+                } else {
+                    welcome.frame(maxWidth: .infinity, minHeight: 480)
                 }
             }
 
@@ -73,6 +65,14 @@ struct ChatView: View {
         .sheet(isPresented: $showingHistory) { HistoryView() }
         .sheet(isPresented: $showingRemote) { RemoteWorkspaceView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(item: $editingMessage) { EditMessageView(message: $0) }
+        .sheet(isPresented: $showingSearch, onDismiss: {
+            if let searchSelection { highlightedID = searchSelection; jumpID = searchSelection }
+            searchSelection = nil
+        }) {
+            MessageSearchView(entries: searchEntries, scope: "当前本机对话") { searchSelection = $0 }
+        }
+        .onChange(of: model.selectedID) { _, _ in highlightedID = nil; jumpID = nil }
         .task(id: model.settings) { await model.checkConnection() }
         .onChange(of: model.draftKey) { _, _ in
             pendingImage = nil
@@ -159,16 +159,30 @@ struct ChatView: View {
                     .frame(width: 42, height: 42)
             }
             .accessibilityLabel("服务端会话与定时任务")
-            Button { showingSettings = true } label: {
-                Image(systemName: "slider.horizontal.3")
+            Menu {
+                Button("查找消息", systemImage: "magnifyingglass") { showingSearch = true }
+                    .disabled(model.selectedConversation?.messages.isEmpty != false)
+                Button("连接管理", systemImage: "slider.horizontal.3") { showingSettings = true }
+            } label: {
+                Image(systemName: "ellipsis.circle")
                     .font(.system(size: 18))
                     .frame(width: 42, height: 42)
             }
-            .accessibilityLabel("连接管理")
+            .accessibilityLabel("查找消息与连接管理")
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
+    }
+
+    private var timelineToken: String {
+        "\(model.selectedConversation?.messages.last?.id.uuidString ?? "")|\(model.streamedReply.count)|\(model.isSending)"
+    }
+
+    private var searchEntries: [MessageSearchEntry] {
+        (model.selectedConversation?.messages ?? []).map {
+            MessageSearchEntry(id: $0.id.uuidString, label: $0.role == .user ? "我" : "Hermes", text: $0.content)
+        }
     }
 
     private var connectionLabel: String {
@@ -340,6 +354,8 @@ struct ChatView: View {
 
 private struct MessageBubble: View {
     let message: ChatMessage
+    let attachmentDirectory: URL
+    var highlighted = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -351,8 +367,9 @@ private struct MessageBubble: View {
                     .frame(width: 28, height: 28)
             }
             VStack(alignment: .leading, spacing: 10) {
+                if highlighted { Label("查找结果", systemImage: "magnifyingglass").font(.caption).foregroundStyle(HermesTheme.accent) }
                 if let imageID = message.imageID,
-                   let image = ImageAttachmentStore.image(imageID) {
+                   let image = ImageAttachmentStore.image(imageID, directory: attachmentDirectory) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
@@ -360,10 +377,7 @@ private struct MessageBubble: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 if !message.content.isEmpty {
-                    Text(.init(message.content))
-                        .font(.system(size: 15))
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
+                    MessageContentView(text: message.content, rendersMarkdown: message.role == .assistant)
                 }
             }
             .padding(.horizontal, 15)
@@ -372,6 +386,7 @@ private struct MessageBubble: View {
                 message.role == .user ? HermesTheme.raised : HermesTheme.surface,
                 in: RoundedRectangle(cornerRadius: 18)
             )
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(highlighted ? HermesTheme.accent : .clear, lineWidth: 1))
             if message.role == .assistant { Spacer(minLength: 24) }
         }
         .foregroundStyle(.white)

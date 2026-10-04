@@ -332,6 +332,62 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
+    func branchConversation(at messageID: UUID) -> Bool {
+        guard !isSending, !needsRecovery,
+              let source = selectedConversation,
+              let index = source.messages.firstIndex(where: { $0.id == messageID }) else { return false }
+        return saveBranch(of: source, messages: Array(source.messages[...index])) != nil
+    }
+
+    @discardableResult
+    func editAndResend(_ messageID: UUID, content: String, keepImage: Bool) -> Bool {
+        guard !isSending, !needsRecovery,
+              let source = selectedConversation,
+              let index = source.messages.firstIndex(where: { $0.id == messageID }),
+              source.messages[index].role == .user else { return false }
+        let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let imageID = keepImage ? source.messages[index].imageID : nil
+        guard !text.isEmpty || imageID != nil else { return false }
+        guard settings.isConfigured else {
+            errorMessage = "请先在连接管理中填写 Hermes 服务地址和 API 密钥。"
+            return false
+        }
+        if let imageID {
+            do { _ = try ImageAttachmentStore.load(imageID, directory: attachmentDirectory) }
+            catch {
+                errorMessage = "原消息图片无法读取，请取消保留图片后重试。"
+                return false
+            }
+        }
+        var messages = Array(source.messages[..<index])
+        messages.append(ChatMessage(role: .user, content: text, imageID: imageID))
+        guard let id = saveBranch(of: source, messages: messages) else { return false }
+        requestResponse(for: id)
+        return true
+    }
+
+    private func saveBranch(of source: Conversation, messages: [ChatMessage]) -> UUID? {
+        // Fresh identities keep edits and search targets independent. Images remain shared
+        // until no conversation references them; deletion already checks all profiles.
+        let copies = messages.map { ChatMessage(role: $0.role, content: $0.content,
+                                                createdAt: $0.createdAt, imageID: $0.imageID) }
+        let branch = Conversation(title: String(source.title.prefix(75)) + " · 分支",
+                                  messages: copies, updatedAt: Date(), profileID: activeProfileID)
+        let candidate = [branch] + allConversations
+        do {
+            try JSONEncoder().encode(candidate).write(to: conversationsURL, options: .atomic)
+        } catch {
+            errorMessage = "分支保存失败，尚未发送消息：\(error.localizedDescription)"
+            return nil
+        }
+        allConversations = candidate
+        refreshConversations()
+        selectedID = branch.id
+        rememberSelection()
+        return branch.id
+    }
+
+    @discardableResult
     func send(_ rawText: String, imageData: Data? = nil) -> Bool {
         guard !storageLoadFailed else {
             errorMessage = ProfileError.storageUnavailable.localizedDescription

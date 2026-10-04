@@ -8,6 +8,10 @@ struct RemoteSessionDetailView: View {
     @State private var title = ""
     @State private var deleting = false
     @State private var busy = false
+    @State private var showingSearch = false
+    @State private var searchSelection: String?
+    @State private var jumpID: String?
+    @State private var highlightedID: String?
 
     init(session: RemoteSession, client: HermesClient, draftStore: DraftStore, onChange: @escaping () -> Void) {
         _conversation = StateObject(wrappedValue: RemoteConversationModel(session: session, client: client, draftStore: draftStore))
@@ -16,76 +20,69 @@ struct RemoteSessionDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        if conversation.isLoading { ProgressView("正在读取消息…") }
-                        if conversation.hasOlderMessages {
-                            Button {
-                                let anchor = conversation.visibleMessages.first?.id
-                                Task {
-                                    await conversation.loadOlder()
-                                    await Task.yield()
-                                    if let anchor { proxy.scrollTo(anchor, anchor: .top) }
-                                }
-                            } label: {
-                                HStack {
-                                    Spacer()
-                                    if conversation.isLoadingOlder { ProgressView() }
-                                    else { Text("加载更早的消息") }
-                                    Spacer()
-                                }
+            ChatTimeline(contextID: conversation.session.id, updateToken: timelineToken, jumpID: $jumpID) { proxy, pauseFollow in
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    if conversation.isLoading { ProgressView("正在读取消息…") }
+                    if conversation.hasOlderMessages {
+                        Button {
+                            pauseFollow()
+                            let anchor = conversation.visibleMessages.first?.id
+                            Task {
+                                await conversation.loadOlder()
+                                await Task.yield()
+                                if let anchor { proxy.scrollTo(TimelineAnchor.message(anchor), anchor: .top) }
                             }
-                            .disabled(!conversation.canSend || busy)
-                        }
-                        if conversation.visibleMessages.isEmpty && !conversation.isLoading && !conversation.isSending {
-                            ContentUnavailableView("开始这段会话", systemImage: "text.bubble",
-                                                   description: Text("发送消息后，Hermes 会在服务端保存对话。"))
-                        }
-                        ForEach(conversation.visibleMessages) { message in
-                            RemoteMessageCard(label: label(for: message), text: message.content)
-                                .id(message.id)
-                        }
-                        if let input = conversation.transientInput {
-                            RemoteMessageCard(label: "我", text: input)
-                        }
-                        if !conversation.streamedReply.isEmpty {
-                            RemoteMessageCard(label: "Hermes", text: conversation.streamedReply)
-                        }
-                        ForEach(conversation.approvals) { approval in
-                            approvalCard(approval)
-                        }
-                        if !conversation.progress.isEmpty {
-                            HStack(spacing: 10) {
-                                if conversation.isSending { ProgressView() }
-                                Text(conversation.progress)
-                                    .font(.caption).foregroundStyle(HermesTheme.muted)
+                        } label: {
+                            HStack {
                                 Spacer()
-                                if conversation.isSending {
-                                    Button(conversation.isStopping ? "正在停止" : "停止") {
-                                        Task { await conversation.stop() }
-                                    }
-                                    .disabled(conversation.isStopping)
-                                }
+                                if conversation.isLoadingOlder { ProgressView() }
+                                else { Text("加载更早的消息") }
+                                Spacer()
                             }
-                            .id("progress")
                         }
+                        .disabled(!conversation.canSend || busy)
                     }
-                    .padding(16)
-                    Color.clear.frame(height: 1).id("bottom")
+                    if conversation.visibleMessages.isEmpty && !conversation.isLoading && !conversation.isSending {
+                        ContentUnavailableView("开始这段会话", systemImage: "text.bubble",
+                                               description: Text("发送消息后，Hermes 会在服务端保存对话。"))
+                    }
+                    ForEach(conversation.visibleMessages) { message in
+                        RemoteMessageCard(label: label(for: message), text: message.content,
+                                          rendersMarkdown: message.role == "assistant", highlighted: highlightedID == message.id)
+                            .id(TimelineAnchor.message(message.id))
+                            .contextMenu {
+                                Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
+                                ShareLink(item: message.content) { Label("分享文字", systemImage: "square.and.arrow.up") }
+                            }
+                    }
+                    if let input = conversation.transientInput {
+                        RemoteMessageCard(label: "我", text: input, rendersMarkdown: false)
+                    }
+                    if !conversation.streamedReply.isEmpty {
+                        RemoteMessageCard(label: "Hermes", text: conversation.streamedReply)
+                    }
+                    ForEach(conversation.approvals) { approval in
+                        approvalCard(approval)
+                    }
+                    if !conversation.progress.isEmpty {
+                        HStack(spacing: 10) {
+                            if conversation.isSending { ProgressView() }
+                            Text(conversation.progress)
+                                .font(.caption).foregroundStyle(HermesTheme.muted)
+                            Spacer()
+                            if conversation.isSending {
+                                Button(conversation.isStopping ? "正在停止" : "停止") {
+                                    Task { await conversation.stop() }
+                                }
+                                .disabled(conversation.isStopping)
+                            }
+                        }
+                        .id("progress")
+                    }
                 }
-                .defaultScrollAnchor(.bottom)
-                .refreshable { await conversation.reload() }
-                .onChange(of: conversation.messages.last?.id) { _, _ in
-                    proxy.scrollTo("bottom", anchor: .bottom)
-                }
-                .onChange(of: conversation.streamedReply.count) { _, _ in
-                    proxy.scrollTo("bottom", anchor: .bottom)
-                }
-                .onChange(of: conversation.approvals.count) { _, _ in
-                    proxy.scrollTo("bottom", anchor: .bottom)
-                }
+                .padding(16)
             }
+            .refreshable { await conversation.reload() }
             composer
         }
         .background(HermesTheme.background)
@@ -94,16 +91,28 @@ struct RemoteSessionDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button("查找已加载消息", systemImage: "magnifyingglass") { showingSearch = true }
+                        .disabled(conversation.visibleMessages.isEmpty)
                     Button("刷新消息", systemImage: "arrow.clockwise") { Task { await conversation.reload() } }
+                        .disabled(!conversation.canSend || busy)
                     Button("重命名", systemImage: "pencil") {
                         title = conversation.session.title ?? ""
                         editingTitle = true
-                    }
+                    }.disabled(!conversation.canSend || busy)
                     ShareLink(item: transcript) { Label("分享已加载的记录", systemImage: "square.and.arrow.up") }
                     Button("删除服务端会话", systemImage: "trash", role: .destructive) { deleting = true }
+                        .disabled(!conversation.canSend || busy)
                 } label: { Image(systemName: "ellipsis.circle") }
-                .disabled(!conversation.canSend || busy)
+                .accessibilityLabel("服务端会话操作")
             }
+        }
+        .sheet(isPresented: $showingSearch, onDismiss: {
+            if let searchSelection { highlightedID = searchSelection; jumpID = searchSelection }
+            searchSelection = nil
+        }) {
+            MessageSearchView(entries: conversation.visibleMessages.map {
+                MessageSearchEntry(id: $0.id, label: label(for: $0), text: $0.content)
+            }, scope: "此服务端会话已加载的消息；更早记录需先加载") { searchSelection = $0 }
         }
         .task { await conversation.reload() }
         .onDisappear { conversation.close(); onChange() }
@@ -134,6 +143,10 @@ struct RemoteSessionDetailView: View {
         )) {
             Button("知道了", role: .cancel) { conversation.errorMessage = nil }
         } message: { Text(conversation.errorMessage ?? "") }
+    }
+
+    private var timelineToken: String {
+        "\(conversation.messages.last?.id ?? "")|\(conversation.streamedReply.count)|\(conversation.approvals.count)|\(conversation.progress)"
     }
 
     private var composer: some View {
@@ -201,14 +214,18 @@ struct RemoteSessionDetailView: View {
 private struct RemoteMessageCard: View {
     let label: String
     let text: String
+    var rendersMarkdown = true
+    var highlighted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(label).font(.caption.weight(.bold)).foregroundStyle(HermesTheme.accent)
-            Text(.init(text)).font(.body).textSelection(.enabled)
+            if highlighted { Label("查找结果", systemImage: "magnifyingglass").font(.caption).foregroundStyle(HermesTheme.accent) }
+            MessageContentView(text: text, rendersMarkdown: rendersMarkdown)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(HermesTheme.surface, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(highlighted ? HermesTheme.accent : .clear, lineWidth: 1))
     }
 }

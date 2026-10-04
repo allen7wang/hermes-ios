@@ -34,8 +34,8 @@ enum ImageAttachmentStore {
         try Data(contentsOf: fileURL(for: id, directory: directory))
     }
 
-    static func image(_ id: UUID) -> UIImage? {
-        UIImage(contentsOfFile: fileURL(for: id).path)
+    static func image(_ id: UUID, directory: URL? = nil) -> UIImage? {
+        UIImage(contentsOfFile: fileURL(for: id, directory: directory).path)
     }
 
     static func remove(_ id: UUID, directory: URL? = nil) {
