@@ -106,6 +106,17 @@ struct HermesClient {
         return response.session
     }
 
+    func setSessionPinned(_ id: String, pinned: Bool) async throws -> RemoteSession {
+        var request = authorizedRequest(url: try endpoint("api", "sessions", id))
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["pinned": pinned])
+        let data = try await perform(request: request)
+        let response = try JSONDecoder().decode(RemoteSessionResponse.self, from: data)
+        guard response.session.pinned == pinned else { throw ClientError.invalidResponse }
+        return response.session
+    }
+
     func deleteSession(_ id: String) async throws {
         let response: RemoteSessionDeleteResponse = try await request(
             RemoteSessionDeleteResponse.self,
@@ -120,6 +131,10 @@ struct HermesClient {
         components.queryItems = [URLQueryItem(name: "include_disabled", value: "true")]
         let response: RemoteJobsResponse = try await request(RemoteJobsResponse.self, url: components.url!)
         return response.jobs
+    }
+
+    func job(_ id: String) async throws -> RemoteJob {
+        try await request(RemoteJobResponse.self, url: endpoint("api", "jobs", id)).job
     }
 
     func createJob(name: String, schedule: String, prompt: String) async throws -> RemoteJob {

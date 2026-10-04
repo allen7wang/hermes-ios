@@ -119,7 +119,26 @@ struct RemoteJob: Identifiable, Decodable {
     let lastError: String?
     let schedule: Schedule?
 
-    var isPaused: Bool { enabled == false || state == "paused" }
+    var isPaused: Bool {
+        if state == "completed" || state == "error" { return false }
+        return enabled == false || state == "paused"
+    }
+    var needsAttention: Bool {
+        state == "error" || !(lastError ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        ["error", "failed", "delivery_failed", "unreachable", "auth_failed"].contains(lastStatus ?? "")
+    }
+    var lastStatusLabel: String {
+        switch lastStatus {
+        case "ok", "success", "completed": return "成功"
+        case "error", "failed": return "失败"
+        case "delivery_failed": return "结果投递失败"
+        case "unreachable": return "服务不可达"
+        case "auth_failed": return "认证失败"
+        case "cancelled": return "已取消"
+        case "running": return "运行中"
+        default: return lastStatus ?? "尚未运行"
+        }
+    }
     var editableSchedule: String {
         switch schedule?.kind {
         case "cron": return schedule?.expr ?? scheduleDisplay ?? ""

@@ -16,20 +16,25 @@
 		2FAA70EA5F84179221742BC8 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C28409E01CF3C9A582AF3ADF /* Foundation.framework */; };
 		35E40C189B7DAD19615D9007 /* HermesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01440E4DB1FAFBF6B192E691 /* HermesClient.swift */; };
 		37E06642754314784243D2EF /* DraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3DDB0149B8B7C3DE5C1542 /* DraftStore.swift */; };
+		38AF0667049395E84565DF09 /* WorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A6E570BFEAA95C3FDA6D21 /* WorkspaceTests.swift */; };
 		4563C89BC5440627850E2288 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C97823D7AC1233635B5524D9 /* ChatView.swift */; };
 		5164C7C6649D4FC3FF6EDEDF /* RemoteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A939A91DE145C2410DAA7DA /* RemoteModels.swift */; };
 		5A073E3307869451184E4239 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0049E3692406A81E50FCCAD4 /* Theme.swift */; };
 		6263CB6B02D325949F7FBCB6 /* StreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFDBC33F6E85DE9D8A539338 /* StreamingTests.swift */; };
 		69B9CD0816E1A31B754D752D /* ConnectionProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6408748EE751804A8BE46 /* ConnectionProfile.swift */; };
 		752BFAABB47BDAC3380A44FB /* ConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC847C5D0869EF644B706EE4 /* ConnectionTests.swift */; };
+		7B06E3777F973BC9128FB3F9 /* RemoteTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D603EB8935436D9B4C263C /* RemoteTimestamp.swift */; };
 		842FEC841DB5C4C81A1EAA22 /* SessionStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFE4F80A2E75F738D1DF742 /* SessionStream.swift */; };
 		898A2169D3EAEA49966B6938 /* HermesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4CFD5BA3BED7770588BF6A /* HermesApp.swift */; };
 		97BEDAFBA5E5F0BD3C494CCF /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12BB5F32E7DCE25CAB477328 /* KeychainStore.swift */; };
 		B1F2D39E8B4BE0A8AA2B05A8 /* RemoteWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD1452738C1904CD8499DFBF /* RemoteWorkspaceView.swift */; };
 		B5FCB2E81C1C0EF1AA4609AB /* BackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D54B416F25124FAC90C8A3B /* BackupTests.swift */; };
+		CEBAFD67AE0488E6F23A64BE /* RemoteWorkspaceComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D9512A229B4F10175F1D1E /* RemoteWorkspaceComponents.swift */; };
+		D285EA970190EDDCA822565A /* RemoteJobDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B6321212352660534CFA64 /* RemoteJobDetailView.swift */; };
 		D5BB2E48F52752077D7D2ED4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F619CAF95F1F3614F20BDFE3 /* Assets.xcassets */; };
 		D8D567CDD65EB6E2351B0A33 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C28409E01CF3C9A582AF3ADF /* Foundation.framework */; };
 		DEB8FE59F7BB4EB2272A4A51 /* ImageAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD391E83201FBC04493109 /* ImageAttachmentStore.swift */; };
+		E10728EE25B61814E98A5507 /* RemoteWorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BB7DAB23310BB37C5EBC91 /* RemoteWorkspaceModel.swift */; };
 		F70F53E3233DDEE7B30A2B4B /* BackupArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB7F1C7847EFB13754E8FDC1 /* BackupArchive.swift */; };
 		FA7A7CD5C45684DADBFFD998 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81841F748A2657370F7263E2 /* ChatModels.swift */; };
 		FE9D0166A2D5F0C969C0A00C /* SSEParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D849C1401D58CAD2E2BBA804 /* SSEParser.swift */; };
@@ -49,9 +54,11 @@
 /* Begin PBXFileReference section */
 		0049E3692406A81E50FCCAD4 /* Theme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		01440E4DB1FAFBF6B192E691 /* HermesClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HermesClient.swift; sourceTree = "<group>"; };
+		12B6321212352660534CFA64 /* RemoteJobDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteJobDetailView.swift; sourceTree = "<group>"; };
 		12BB5F32E7DCE25CAB477328 /* KeychainStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		27B6408748EE751804A8BE46 /* ConnectionProfile.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConnectionProfile.swift; sourceTree = "<group>"; };
 		35AC6B866DC1635D55AAB4AA /* RemoteConversationModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteConversationModel.swift; sourceTree = "<group>"; };
+		40D9512A229B4F10175F1D1E /* RemoteWorkspaceComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteWorkspaceComponents.swift; sourceTree = "<group>"; };
 		4FFA3EDAAF6A04F3B595630C /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5D54B416F25124FAC90C8A3B /* BackupTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupTests.swift; sourceTree = "<group>"; };
 		626CB658BDCDB6DC25CB7E91 /* HermesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HermesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -70,9 +77,12 @@
 		C97823D7AC1233635B5524D9 /* ChatView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		C9C4C8104D97FE45A491B33B /* AppModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		CD1452738C1904CD8499DFBF /* RemoteWorkspaceView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteWorkspaceView.swift; sourceTree = "<group>"; };
+		D5BB7DAB23310BB37C5EBC91 /* RemoteWorkspaceModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteWorkspaceModel.swift; sourceTree = "<group>"; };
 		D849C1401D58CAD2E2BBA804 /* SSEParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSEParser.swift; sourceTree = "<group>"; };
 		DC4CFD5BA3BED7770588BF6A /* HermesApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HermesApp.swift; sourceTree = "<group>"; };
 		DF3D49FDC03D59DB268EF9FD /* Hermes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hermes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E2A6E570BFEAA95C3FDA6D21 /* WorkspaceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkspaceTests.swift; sourceTree = "<group>"; };
+		E8D603EB8935436D9B4C263C /* RemoteTimestamp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteTimestamp.swift; sourceTree = "<group>"; };
 		F103E1FAD249F946109D6584 /* HistoryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		F619CAF95F1F3614F20BDFE3 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FFDBC33F6E85DE9D8A539338 /* StreamingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StreamingTests.swift; sourceTree = "<group>"; };
@@ -141,6 +151,10 @@
 				7A3DDB0149B8B7C3DE5C1542 /* DraftStore.swift */,
 				AB7F1C7847EFB13754E8FDC1 /* BackupArchive.swift */,
 				BAC952520B8E67B4038064FB /* BackupView.swift */,
+				12B6321212352660534CFA64 /* RemoteJobDetailView.swift */,
+				E8D603EB8935436D9B4C263C /* RemoteTimestamp.swift */,
+				40D9512A229B4F10175F1D1E /* RemoteWorkspaceComponents.swift */,
+				D5BB7DAB23310BB37C5EBC91 /* RemoteWorkspaceModel.swift */,
 			);
 			name = Hermes;
 			path = Hermes;
@@ -160,6 +174,7 @@
 				FFDBC33F6E85DE9D8A539338 /* StreamingTests.swift */,
 				BC847C5D0869EF644B706EE4 /* ConnectionTests.swift */,
 				5D54B416F25124FAC90C8A3B /* BackupTests.swift */,
+				E2A6E570BFEAA95C3FDA6D21 /* WorkspaceTests.swift */,
 			);
 			name = HermesTests;
 			path = HermesTests;
@@ -285,6 +300,10 @@
 				37E06642754314784243D2EF /* DraftStore.swift in Sources */,
 				F70F53E3233DDEE7B30A2B4B /* BackupArchive.swift in Sources */,
 				2354D680E504462EF7153985 /* BackupView.swift in Sources */,
+				D285EA970190EDDCA822565A /* RemoteJobDetailView.swift in Sources */,
+				7B06E3777F973BC9128FB3F9 /* RemoteTimestamp.swift in Sources */,
+				CEBAFD67AE0488E6F23A64BE /* RemoteWorkspaceComponents.swift in Sources */,
+				E10728EE25B61814E98A5507 /* RemoteWorkspaceModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -295,6 +314,7 @@
 				6263CB6B02D325949F7FBCB6 /* StreamingTests.swift in Sources */,
 				752BFAABB47BDAC3380A44FB /* ConnectionTests.swift in Sources */,
 				B5FCB2E81C1C0EF1AA4609AB /* BackupTests.swift in Sources */,
+				38AF0667049395E84565DF09 /* WorkspaceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,7 +358,7 @@
 				INFOPLIST_FILE = Hermes/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;
@@ -433,7 +453,7 @@
 				INFOPLIST_FILE = Hermes/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;
