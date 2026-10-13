@@ -14,6 +14,7 @@ struct BackupArchive: Codable {
     var images: [String: Data]
 
     var bookmarkCount: Int { conversations.reduce(0) { $0 + $1.messages.filter { $0.bookmark != nil }.count } }
+    var templateCount: Int { profiles.reduce(0) { $0 + $1.templates.count } }
 
     static func read(from url: URL) throws -> BackupArchive {
         let file = try FileHandle(forReadingFrom: url)
@@ -41,7 +42,7 @@ struct BackupArchive: Codable {
 
     func validate() throws {
         guard format == "hermes-ios-backup" else { throw BackupError.invalidFile }
-        guard (1...2).contains(version) else { throw BackupError.unsupportedVersion }
+        guard (1...3).contains(version) else { throw BackupError.unsupportedVersion }
         guard !profiles.isEmpty, profiles.count <= 100,
               conversations.count <= 5_000,
               conversations.reduce(0, { $0 + $1.messages.count }) <= 100_000,
@@ -52,6 +53,9 @@ struct BackupArchive: Codable {
         var referencedImages = Set<String>()
         for profile in profiles {
             guard !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw BackupError.invalidFile }
+            guard version >= 3 || profile.templates.isEmpty else { throw BackupError.invalidFile }
+            do { try PromptTemplate.validateCollection(profile.templates) }
+            catch { throw BackupError.invalidFile }
             if !profile.serverURL.isEmpty { _ = try HermesClient(settings: profile.settings(apiKey: "")).rootURL }
         }
         for conversation in conversations {
@@ -95,9 +99,10 @@ struct BackupImportReport {
     let conversationsKept: Int
     let draftsAdded: Int
     let imagesAdded: Int
+    let templatesAdded: Int
 
     var description: String {
-        "新增 \(profilesAdded) 个连接、\(conversationsAdded) 段对话、\(draftsAdded) 份草稿和 \(imagesAdded) 张图片；保留 \(conversationsKept) 段已有对话。"
+        "新增 \(profilesAdded) 个连接、\(conversationsAdded) 段对话、\(draftsAdded) 份草稿、\(imagesAdded) 张图片和 \(templatesAdded) 个提示词模板；保留 \(conversationsKept) 段已有对话。"
     }
 }
 
@@ -115,6 +120,7 @@ struct BackupMerge {
         var profileMap: [UUID: UUID] = [:]
         var conversationMap: [UUID: UUID] = [:]
         var kept = 0
+        var templatesAdded = 0
         for profile in archive.profiles {
             let endpoint = try identity(profile)
             // Only the same installation can match an original ID. Fresh imports receive stable IDs.
@@ -127,8 +133,22 @@ struct BackupMerge {
                 var imported = profile
                 imported.id = target
                 imported.name = String(profile.name.prefix(60)) + "（已导入）"
+                imported.templates = []
                 profiles.append(imported)
             }
+            guard let index = profiles.firstIndex(where: { $0.id == target }) else { throw BackupError.invalidFile }
+            var templates = profiles[index].templates
+            for template in profile.templates {
+                let templateID = original != nil ? template.id : stableID([archive.installationID.uuidString, template.id.uuidString, target.uuidString, "prompt"])
+                if templates.contains(where: { $0.id == templateID }) { continue }
+                let imported = PromptTemplate(id: templateID, title: template.title, body: template.body,
+                    createdAt: template.createdAt, updatedAt: template.updatedAt, pinned: template.pinned)
+                // Existing edits take precedence; stable IDs make repeated foreign imports idempotent.
+                templates.append(imported)
+                templatesAdded += 1
+            }
+            try PromptTemplate.validateCollection(templates)
+            profiles[index].templates = templates
         }
         for conversation in archive.conversations {
             guard let sourceProfile = conversation.profileID, let targetProfile = profileMap[sourceProfile] else { throw BackupError.invalidFile }
@@ -165,7 +185,8 @@ struct BackupMerge {
         return BackupMerge(state: BackupRestoreState(library: mergedLibrary, conversations: records, drafts: texts, images: images),
                            report: BackupImportReport(profilesAdded: profiles.count - library.profiles.count,
                                                       conversationsAdded: records.count - conversations.count,
-                                                      conversationsKept: kept, draftsAdded: draftsAdded, imagesAdded: images.count))
+                                                      conversationsKept: kept, draftsAdded: draftsAdded, imagesAdded: images.count,
+                                                      templatesAdded: templatesAdded))
     }
 
     private static func identity(_ profile: ConnectionProfile) throws -> String {

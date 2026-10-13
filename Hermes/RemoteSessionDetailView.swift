@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RemoteSessionDetailView: View {
+    @EnvironmentObject private var model: AppModel
     @StateObject private var conversation: RemoteConversationModel
     @Environment(\.dismiss) private var dismiss
     let onChange: () -> Void
@@ -11,6 +12,8 @@ struct RemoteSessionDetailView: View {
     @State private var showingSearch = false
     @State private var searchSelection: String?
     @State private var jumpRequest: TimelineJumpRequest?
+    @State private var showingPrompts = false
+    @State private var promptNotice = false
 
     init(session: RemoteSession, client: HermesClient, draftStore: DraftStore, onChange: @escaping () -> Void) {
         _conversation = StateObject(wrappedValue: RemoteConversationModel(session: session, client: client, draftStore: draftStore))
@@ -90,6 +93,7 @@ struct RemoteSessionDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button("提示词模板", systemImage: "text.badge.plus") { showingPrompts = true }
                     Button("查找已加载消息", systemImage: "magnifyingglass") { showingSearch = true }
                         .disabled(conversation.visibleMessages.isEmpty)
                     Button("刷新消息", systemImage: "arrow.clockwise") { Task { await conversation.reload() } }
@@ -103,6 +107,15 @@ struct RemoteSessionDetailView: View {
                         .disabled(!conversation.canSend || busy)
                 } label: { Image(systemName: "ellipsis.circle") }
                 .accessibilityLabel("服务端会话操作")
+            }
+        }
+        .sheet(isPresented: $showingPrompts) {
+            PromptLibraryView(profileID: conversation.client.settings.profileID ?? model.activeProfileID,
+                              contextTitle: "服务端 · " + conversation.session.displayTitle,
+                              currentDraft: { conversation.draft }) { text, mode in
+                guard conversation.client.settings.profileID == model.activeProfileID else { throw PromptError.changedContext }
+                try conversation.applyPrompt(text, mode: mode)
+                promptNotice = true
             }
         }
         .sheet(isPresented: $showingSearch, onDismiss: {
@@ -153,24 +166,31 @@ struct RemoteSessionDetailView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            TextField("继续这段服务端会话…", text: $conversation.draft, axis: .vertical)
-                .lineLimit(1...5)
-                .padding(12)
-                .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 16))
-                .accessibilityLabel("服务端会话消息")
-            Button {
-                _ = conversation.send(conversation.draft)
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.headline)
-                    .foregroundStyle(HermesTheme.background)
-                    .frame(width: 44, height: 44)
-                    .background(HermesTheme.accent, in: Circle())
+        VStack(alignment: .leading, spacing: 10) {
+            Button("提示词模板", systemImage: "text.badge.plus") { showingPrompts = true }
+                .font(.caption.weight(.medium)).foregroundStyle(HermesTheme.accent)
+            if promptNotice {
+                Text("已套用提示词，尚未发送。").font(.caption).foregroundStyle(HermesTheme.accent)
             }
-            .disabled(!conversation.canSend || busy || conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(conversation.canSend && !busy && !conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.4)
-            .accessibilityLabel("发送到服务端会话")
+            HStack(alignment: .bottom, spacing: 12) {
+                TextField("继续这段服务端会话…", text: $conversation.draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .padding(12)
+                    .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 16))
+                    .accessibilityLabel("服务端会话消息")
+                Button {
+                    if conversation.send(conversation.draft) { promptNotice = false }
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.headline)
+                        .foregroundStyle(HermesTheme.background)
+                        .frame(width: 44, height: 44)
+                        .background(HermesTheme.accent, in: Circle())
+                }
+                .disabled(!conversation.canSend || busy || conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(conversation.canSend && !busy && !conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.4)
+                .accessibilityLabel("发送到服务端会话")
+            }
         }
         .padding(16)
     }

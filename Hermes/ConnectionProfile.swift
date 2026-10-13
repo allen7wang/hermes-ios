@@ -8,6 +8,12 @@ struct ConnectionProfile: Identifiable, Codable, Equatable {
     var name: String
     var serverURL: String
     var model: String
+    var promptTemplates: [PromptTemplate]?
+
+    var templates: [PromptTemplate] {
+        get { promptTemplates ?? [] }
+        set { promptTemplates = newValue.isEmpty ? nil : newValue }
+    }
 
     var credentialAccount: String {
         id == Self.legacyID ? "api-server-key" : "connection-\(id.uuidString)"

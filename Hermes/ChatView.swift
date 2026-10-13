@@ -1,6 +1,13 @@
 import SwiftUI
 import PhotosUI
 
+private struct PromptComposerContext: Identifiable {
+    let id = UUID()
+    let profileID: UUID
+    let draftKey: String
+    let title: String
+}
+
 struct ChatView: View {
     @EnvironmentObject private var model: AppModel
     @State private var showingHistory = false
@@ -17,6 +24,7 @@ struct ChatView: View {
     @State private var bookmarkNoteTarget: LocalMessageTarget?
     @State private var composerNotice: String?
     @State private var editingMessage: ChatMessage?
+    @State private var promptContext: PromptComposerContext?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -82,6 +90,13 @@ struct ChatView: View {
         .sheet(isPresented: $showingHistory) { HistoryView() }
         .sheet(isPresented: $showingRemote) { RemoteWorkspaceView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(item: $promptContext) { context in
+            PromptLibraryView(profileID: context.profileID, contextTitle: context.title,
+                              currentDraft: { model.draft }) { text, mode in
+                try model.applyPrompt(text, mode: mode, expectedDraftKey: context.draftKey)
+                composerNotice = "已套用提示词，尚未发送。"
+            }
+        }
         .sheet(item: $editingMessage) { EditMessageView(message: $0) }
         .sheet(item: $bookmarkNoteTarget) { target in
             BookmarkNoteView(target: target, note: model.libraryItem(target)?.message.bookmark?.note ?? "")
@@ -194,6 +209,7 @@ struct ChatView: View {
             }
             .accessibilityLabel("服务端会话与定时任务")
             Menu {
+                Button("提示词模板", systemImage: "text.badge.plus") { openPrompts() }
                 Button("本机消息库", systemImage: "books.vertical") { showingLibrary = true }
                 Button("查找消息", systemImage: "magnifyingglass") { showingSearch = true }
                     .disabled(model.selectedConversation?.messages.isEmpty != false)
@@ -212,6 +228,11 @@ struct ChatView: View {
 
     private var highlightedID: String? {
         jumpRequest?.contextID == model.selectedID?.uuidString ? jumpRequest?.messageID : nil
+    }
+
+    private func openPrompts() {
+        promptContext = PromptComposerContext(profileID: model.activeProfileID, draftKey: model.draftKey,
+                                              title: model.selectedConversation?.title ?? "新对话")
     }
 
     private func performLocalAction(_ action: () throws -> Void) {
@@ -325,12 +346,14 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Button("提示词模板", systemImage: "text.badge.plus") { openPrompts() }
+                .font(.caption.weight(.medium)).foregroundStyle(HermesTheme.accent)
             if let composerNotice {
                 HStack {
                     Text(composerNotice).font(.caption).foregroundStyle(HermesTheme.accent)
                     Spacer()
                     Button { self.composerNotice = nil } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("关闭引用提示")
+                        .accessibilityLabel("关闭草稿提示")
                 }
             }
             if let pendingImage, let preview = UIImage(data: pendingImage) {

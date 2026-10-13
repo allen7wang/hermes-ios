@@ -17,6 +17,7 @@ final class RemoteConversationModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var draft = "" {
         didSet {
+            guard !draftAlreadyPersisted else { return }
             do { try draftStore?.set(draft, for: draftKey) }
             catch { errorMessage = "草稿保存失败：\(error.localizedDescription)" }
         }
@@ -24,6 +25,7 @@ final class RemoteConversationModel: ObservableObject {
 
     let client: HermesClient
     private let draftStore: DraftStore?
+    private var draftAlreadyPersisted = false
     private var activeSessionID: String {
         didSet {
             guard oldValue != activeSessionID else { return }
@@ -47,6 +49,15 @@ final class RemoteConversationModel: ObservableObject {
         activeSessionID = session.id
         self.draftStore = draftStore
         draft = draftStore?.text(for: DraftStore.remoteKey(settings: client.settings, sessionID: session.id)) ?? ""
+    }
+
+    func applyPrompt(_ rendered: String, mode: PromptDraftMode) throws {
+        guard let draftStore else { throw AppModel.ProfileError.storageUnavailable }
+        let next = try PromptRendering.draft(current: draft, rendered: rendered, mode: mode)
+        try draftStore.set(next, for: draftKey)
+        draftAlreadyPersisted = true
+        defer { draftAlreadyPersisted = false }
+        draft = next
     }
 
     func reload() async {

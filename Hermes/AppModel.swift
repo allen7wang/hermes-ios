@@ -89,6 +89,8 @@ final class AppModel: ObservableObject {
             storageLoadFailed = true
             errorMessage = ProfileError.storageUnavailable.localizedDescription
         }
+        do { for profile in savedProfiles { try PromptTemplate.validateCollection(profile.templates) } }
+        catch { storageLoadFailed = true; errorMessage = ProfileError.storageUnavailable.localizedDescription }
         if FileManager.default.fileExists(atPath: conversationsURL.path) {
             do {
                 let saved = try JSONDecoder().decode([Conversation].self, from: Data(contentsOf: conversationsURL))
@@ -126,7 +128,8 @@ final class AppModel: ObservableObject {
             name: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)),
             serverURL: connection.serverURL.trimmingCharacters(in: .whitespacesAndNewlines),
             model: connection.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "hermes-agent" : connection.model.trimmingCharacters(in: .whitespacesAndNewlines)
+                ? "hermes-agent" : connection.model.trimmingCharacters(in: .whitespacesAndNewlines),
+            promptTemplates: keepsIdentity ? existing?.promptTemplates : nil
         )
         guard !profile.name.isEmpty else { throw ProfileError.missingName }
         try credentials.save(connection.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), account: profile.credentialAccount)
@@ -309,6 +312,63 @@ final class AppModel: ObservableObject {
         draft = next
     }
 
+    var promptTemplates: [PromptTemplate] { profiles.first { $0.id == activeProfileID }?.templates ?? [] }
+
+    @discardableResult
+    func savePromptTemplate(id: UUID?, title: String, body: String, profileID: UUID) throws -> UUID {
+        let templateID = id ?? UUID()
+        try changePromptTemplates(profileID: profileID) { templates in
+            let existing = id.flatMap { id in templates.first { $0.id == id } }
+            if id != nil && existing == nil { throw PromptError.missing }
+            let template = PromptTemplate(id: templateID, title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                body: body.trimmingCharacters(in: .whitespacesAndNewlines), createdAt: existing?.createdAt ?? Date(),
+                updatedAt: Date(), pinned: existing?.pinned ?? false)
+            try template.validate()
+            if let index = templates.firstIndex(where: { $0.id == templateID }) { templates[index] = template }
+            else { templates.append(template) }
+        }
+        return templateID
+    }
+
+    func togglePromptPin(_ id: UUID, profileID: UUID) throws {
+        try changePromptTemplates(profileID: profileID) { templates in
+            guard let index = templates.firstIndex(where: { $0.id == id }) else { throw PromptError.missing }
+            templates[index].pinned.toggle()
+        }
+    }
+
+    func deletePromptTemplate(_ id: UUID, profileID: UUID) throws {
+        try changePromptTemplates(profileID: profileID) { templates in
+            guard templates.contains(where: { $0.id == id }) else { throw PromptError.missing }
+            templates.removeAll { $0.id == id }
+        }
+    }
+
+    private func changePromptTemplates(profileID: UUID, change: (inout [PromptTemplate]) throws -> Void) throws {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard profileID == activeProfileID, let index = profiles.firstIndex(where: { $0.id == profileID }) else { throw PromptError.changedContext }
+        var candidate = profiles
+        var templates = candidate[index].templates
+        try change(&templates)
+        try PromptTemplate.validateCollection(templates)
+        candidate[index].templates = templates
+        let library = ConnectionLibrary(profiles: candidate, activeID: activeProfileID, selectedConversations: selectedConversations)
+        let data = try JSONEncoder().encode(library)
+        try data.write(to: directory.appendingPathComponent("connections.json"), options: .atomic)
+        defaults.set(data, forKey: "connectionLibrary")
+        profiles = candidate
+    }
+
+    func applyPrompt(_ rendered: String, mode: PromptDraftMode, expectedDraftKey: String) throws {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard expectedDraftKey == draftKey else { throw PromptError.changedContext }
+        let next = try PromptRendering.draft(current: draft, rendered: rendered, mode: mode)
+        try draftStore.set(next, for: draftKey)
+        draftAlreadyPersisted = true
+        defer { draftAlreadyPersisted = false }
+        draft = next
+    }
+
     func makeBackup() throws -> BackupArchive {
         guard !isSending else { throw ProfileError.sending }
         guard !storageLoadFailed else { throw ProfileError.storageUnavailable }
@@ -325,6 +385,7 @@ final class AppModel: ObservableObject {
         var archive = BackupArchive(installationID: installationID, createdAt: Date(), profiles: profiles,
                                     conversations: allConversations, drafts: try draftStore.snapshot(), images: images)
         if archive.bookmarkCount > 0 { archive.version = 2 }
+        if archive.templateCount > 0 { archive.version = 3 }
         try archive.validate()
         return archive
     }
