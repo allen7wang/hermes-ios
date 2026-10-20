@@ -1,3 +1,4 @@
+import MarkdownUI
 import SwiftUI
 import UIKit
 
@@ -11,8 +12,10 @@ struct MessageContentView: View {
                 ForEach(MessageContent.blocks(text)) { block in
                     switch block.kind {
                     case .prose(let prose):
-                        Text((try? AttributedString(markdown: prose, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(prose))
-                            .font(.system(size: 15)).lineSpacing(4).textSelection(.enabled)
+                        Markdown(prose)
+                            .markdownTheme(.hermes)
+                            .markdownSoftBreakMode(.lineBreak)
+                            .textSelection(.enabled)
                     case .code(let language, let code):
                         CodeBlockView(language: language, code: code)
                     }
@@ -48,9 +51,17 @@ private struct CodeBlockView: View {
             .padding(.horizontal, 12)
             Divider().overlay(HermesTheme.muted.opacity(0.2))
             ScrollView(.horizontal) {
-                Text(code).font(.system(size: 13, design: .monospaced))
-                    .textSelection(.enabled).fixedSize(horizontal: true, vertical: false)
-                    .padding(12)
+                Group {
+                    if let highlighted = CodeHighlighter.highlighted(code: code, language: language) {
+                        Text(highlighted)
+                    } else {
+                        Text(code)
+                    }
+                }
+                .font(.system(size: 13, design: .monospaced))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(12)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
