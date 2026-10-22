@@ -82,7 +82,7 @@ struct SettingsView: View {
                 .listRowBackground(HermesTheme.surface)
 
                 Section("关于 Hermes") {
-                    LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.1.0")
+                    LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.0.0")
                     Text("本机记录、标签、草稿与对话设置保存在设备上。服务端会话和定时任务由你连接的服务器管理。")
                         .font(.footnote).foregroundStyle(HermesTheme.muted)
                 }.listRowBackground(HermesTheme.surface)

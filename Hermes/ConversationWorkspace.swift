@@ -69,7 +69,7 @@ enum ConversationSort: String, CaseIterable, Identifiable {
 }
 
 enum ConversationWorkbench {
-    static func filtered(_ conversations: [Conversation], scope: ConversationScope, query: String, tag: String?, sort: ConversationSort) -> [Conversation] {
+    static func filtered(_ conversations: [Conversation], scope: ConversationScope, query: String, tag: String?, sort: ConversationSort, project: ProjectFilter = .all) -> [Conversation] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return conversations.filter { conversation in
             let inScope = scope == .trash ? conversation.isTrashed : !conversation.isTrashed &&
@@ -77,7 +77,7 @@ enum ConversationWorkbench {
             let hasTag = tag == nil || conversation.workspaceState.tags.contains(tag!)
             let matches = query.isEmpty || ([conversation.title] + conversation.workspaceState.tags + conversation.messages.map(\.content))
                 .contains { $0.localizedStandardContains(query) }
-            return inScope && hasTag && matches
+            return inScope && hasTag && matches && project.matches(conversation)
         }.sorted { a, b in
             if sort == .recent && a.isPinned != b.isPinned { return a.isPinned }
             if sort == .title && a.title != b.title { return a.title.localizedStandardCompare(b.title) == .orderedAscending }

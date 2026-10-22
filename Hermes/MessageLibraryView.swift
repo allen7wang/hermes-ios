@@ -13,6 +13,7 @@ struct MessageLibraryView: View {
     @State private var searching = false
     @State private var scope: MessageLibraryScope = .all
     @State private var tag: String?
+    @State private var project: ProjectFilter = .all
 
     private struct QueryRequest: Equatable {
         let conversations: [Conversation]
@@ -21,10 +22,19 @@ struct MessageLibraryView: View {
         let role: MessageLibraryRole
         let scope: MessageLibraryScope
         let tag: String?
+        let project: ProjectFilter
+        let projects: [LocalProject]
     }
 
     private var request: QueryRequest {
-        QueryRequest(conversations: model.conversations, query: query, filter: filter, role: role, scope: scope, tag: tag)
+        QueryRequest(conversations: model.conversations, query: query, filter: filter, role: role, scope: scope, tag: tag, project: project, projects: model.projects)
+    }
+    private var projectLabel: String {
+        switch project {
+        case .all: "全部项目"
+        case .unassigned: "未分组"
+        case .project(let id): model.projects.first { $0.id == id }?.name ?? "项目已不可用"
+        }
     }
     private var availableTags: [String] { Array(Set(model.conversations.flatMap { $0.workspaceState.tags })).sorted() }
 
@@ -40,12 +50,12 @@ struct MessageLibraryView: View {
                     Picker("消息范围", selection: $filter) {
                         ForEach(MessageLibraryFilter.allCases) { Text($0.label).tag($0) }
                     }.pickerStyle(.segmented)
-                    if tag != nil || scope != .all || role != .all {
+                    if tag != nil || scope != .all || role != .all || project != .all {
                         HStack {
-                            Text([scope.title, role.label, tag.map { "#" + $0 } ?? "全部标签"].joined(separator: " · "))
+                            Text([projectLabel, scope.title, role.label, tag.map { "#" + $0 } ?? "全部标签"].joined(separator: " · "))
                                 .font(.caption).foregroundStyle(HermesTheme.accent).lineLimit(2)
                             Spacer()
-                            Button("清除筛选") { scope = .all; role = .all; tag = nil }.font(.caption)
+                            Button("清除筛选") { scope = .all; role = .all; tag = nil; project = .all }.font(.caption)
                         }
                     }
                 }.padding(16)
@@ -69,7 +79,7 @@ struct MessageLibraryView: View {
                 }
             }
             .background(HermesTheme.background)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索正文、对话标题、标签或备注")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索正文、项目、标签或备注")
             .navigationTitle("本机消息库").navigationBarTitleDisplayMode(.inline)
             .task(id: request) {
                 let snapshot = request
@@ -78,7 +88,8 @@ struct MessageLibraryView: View {
                 catch { return }
                 let search = Task.detached(priority: .userInitiated) {
                     MessageLibrary.items(in: snapshot.conversations, query: snapshot.query, filter: snapshot.filter,
-                                         role: snapshot.role, scope: snapshot.scope, tag: snapshot.tag)
+                                         role: snapshot.role, scope: snapshot.scope, tag: snapshot.tag,
+                                         project: snapshot.project, projects: snapshot.projects)
                 }
                 let matches = await withTaskCancellationHandler(operation: { await search.value }, onCancel: { search.cancel() })
                 guard !Task.isCancelled else { return }
@@ -92,6 +103,11 @@ struct MessageLibraryView: View {
                 if !embedded { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Picker("所属项目", selection: $project) {
+                            Text("全部项目").tag(ProjectFilter.all)
+                            Text("未分组").tag(ProjectFilter.unassigned)
+                            ForEach(model.projects) { Text($0.name).tag(ProjectFilter.project($0.id)) }
+                        }
                         Picker("消息角色", selection: $role) {
                             ForEach(MessageLibraryRole.allCases) { Text($0.label).tag($0) }
                         }
@@ -103,15 +119,18 @@ struct MessageLibraryView: View {
                             ForEach(availableTags, id: \.self) { Text($0).tag(Optional($0)) }
                         }
                     } label: {
-                        Image(systemName: role == .all && scope == .all && tag == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        Image(systemName: role == .all && scope == .all && tag == nil && project == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                     }
-                    .accessibilityLabel("筛选角色、对话范围与标签")
+                    .accessibilityLabel("筛选项目、角色、对话范围与标签")
                 }
             }
         }
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .onChange(of: availableTags) { _, values in if let tag, !values.contains(tag) { self.tag = nil } }
-        .onChange(of: model.activeProfileID) { _, _ in query = ""; scope = .all; role = .all; tag = nil }
+        .onChange(of: model.activeProfileID) { _, _ in query = ""; scope = .all; role = .all; tag = nil; project = .all }
+        .onChange(of: model.projects.map(\.id)) { _, ids in
+            if case .project(let id) = project, !ids.contains(id) { project = .all }
+        }
     }
 }
 
@@ -142,6 +161,9 @@ private struct MessageLibraryRow: View {
                 Spacer()
                 Text(item.message.createdAt, style: .date)
             }.font(.caption).foregroundStyle(HermesTheme.muted)
+            if let name = item.projectName {
+                Label(name, systemImage: "folder").font(.caption).foregroundStyle(HermesTheme.accent).lineLimit(1)
+            }
             if let hit {
                 (Text(hit.before) + Text(hit.match).bold().foregroundColor(HermesTheme.accent) + Text(hit.after))
                     .font(.subheadline).lineLimit(4)
@@ -179,6 +201,10 @@ private struct MessageLibraryDetailView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(item.conversationTitle).font(.headline)
+                            if let conversation = model.conversations.first(where: { $0.id == target.conversationID }),
+                               let project = model.project(for: conversation) {
+                                Label(project.name, systemImage: "folder").font(.caption).foregroundStyle(HermesTheme.accent)
+                            }
                             HStack {
                                 Text(item.roleLabel)
                                 Text(item.message.createdAt, style: .date)

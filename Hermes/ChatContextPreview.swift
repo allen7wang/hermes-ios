@@ -24,9 +24,21 @@ struct PreparedChatContext {
     let configuration: ConversationConfiguration
     let messages: [ChatMessage]
     let omittedMessageCount: Int
+    let project: LocalProject?
+    let effectiveSystemPrompt: String
 
-    init(messages: [ChatMessage], configuration: ConversationConfiguration) throws {
+    init(messages: [ChatMessage], configuration: ConversationConfiguration, project: LocalProject? = nil) throws {
         self.configuration = try configuration.validated()
+        self.project = try project?.validated()
+        let projectInstructions = self.project?.instructions ?? ""
+        let conversationInstructions = self.configuration.systemPrompt
+        if projectInstructions.isEmpty {
+            effectiveSystemPrompt = conversationInstructions
+        } else if conversationInstructions.isEmpty {
+            effectiveSystemPrompt = "项目指令\n" + projectInstructions
+        } else {
+            effectiveSystemPrompt = "项目指令\n" + projectInstructions + "\n\n对话指令\n" + conversationInstructions
+        }
         self.messages = self.configuration.history(from: messages).map {
             var message = $0
             message.bookmark = nil

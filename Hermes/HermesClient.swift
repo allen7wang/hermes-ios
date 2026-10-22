@@ -239,12 +239,13 @@ struct HermesClient {
     func stream(
         messages: [ChatMessage],
         configuration: ConversationConfiguration = ConversationConfiguration(),
+        project: LocalProject? = nil,
         onEvent: (ChatStreamEvent) async -> Void
     ) async throws -> String {
-        let plan = try PreparedChatContext(messages: messages, configuration: configuration)
+        let plan = try PreparedChatContext(messages: messages, configuration: configuration, project: project)
         let options = plan.configuration
         var context = try plan.messages.map { try CompletionMessage($0, directory: attachmentDirectory) }
-        if !options.systemPrompt.isEmpty { context.insert(CompletionMessage(systemPrompt: options.systemPrompt), at: 0) }
+        if !plan.effectiveSystemPrompt.isEmpty { context.insert(CompletionMessage(systemPrompt: plan.effectiveSystemPrompt), at: 0) }
         let url = try endpoint("v1", "chat", "completions")
         var request = authorizedRequest(url: url)
         request.httpMethod = "POST"

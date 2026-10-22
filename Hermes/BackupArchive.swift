@@ -15,8 +15,10 @@ struct BackupArchive: Codable {
 
     var bookmarkCount: Int { conversations.reduce(0) { $0 + $1.messages.filter { $0.bookmark != nil }.count } }
     var templateCount: Int { profiles.reduce(0) { $0 + $1.templates.count } }
+    var projectCount: Int { profiles.reduce(0) { $0 + $1.projects.count } }
     var trashCount: Int { conversations.filter(\.isTrashed).count }
     var minimumVersion: Int {
+        if projectCount > 0 || conversations.contains(where: { $0.projectID != nil }) { return 6 }
         if trashCount > 0 { return 5 }
         if profiles.contains(where: { $0.conversationDefaults != nil }) || conversations.contains(where: { $0.workspace != nil }) { return 4 }
         if templateCount > 0 { return 3 }
@@ -49,7 +51,7 @@ struct BackupArchive: Codable {
 
     func validate() throws {
         guard format == "hermes-ios-backup" else { throw BackupError.invalidFile }
-        guard (1...5).contains(version) else { throw BackupError.unsupportedVersion }
+        guard (1...6).contains(version) else { throw BackupError.unsupportedVersion }
         guard version >= minimumVersion else { throw BackupError.invalidFile }
         guard !profiles.isEmpty, profiles.count <= 100,
               conversations.count <= 5_000,
@@ -62,8 +64,10 @@ struct BackupArchive: Codable {
         for profile in profiles {
             guard !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw BackupError.invalidFile }
             guard version >= 3 || profile.templates.isEmpty else { throw BackupError.invalidFile }
-            do { try PromptTemplate.validateCollection(profile.templates) }
-            catch { throw BackupError.invalidFile }
+            do {
+                try PromptTemplate.validateCollection(profile.templates)
+                try LocalProject.validateCollection(profile.projects)
+            } catch { throw BackupError.invalidFile }
             if let configuration = profile.conversationDefaults {
                 guard try configuration.validated() == configuration else { throw BackupError.invalidFile }
             }
@@ -73,6 +77,9 @@ struct BackupArchive: Codable {
             try conversation.workspaceState.validate()
             guard let profileID = conversation.profileID, profileIDs.contains(profileID),
                   Set(conversation.messages.map(\.id)).count == conversation.messages.count else { throw BackupError.invalidFile }
+            if let projectID = conversation.projectID {
+                guard profiles.first(where: { $0.id == profileID })?.projects.contains(where: { $0.id == projectID }) == true else { throw BackupError.invalidFile }
+            }
             conversationProfiles[conversation.id] = profileID
             referencedImages.formUnion(conversation.messages.compactMap { $0.imageID?.uuidString })
             for message in conversation.messages {
@@ -112,9 +119,10 @@ struct BackupImportReport {
     let draftsAdded: Int
     let imagesAdded: Int
     let templatesAdded: Int
+    let projectsAdded: Int
 
     var description: String {
-        "新增 \(profilesAdded) 个连接、\(conversationsAdded) 段对话、\(draftsAdded) 份草稿、\(imagesAdded) 张图片和 \(templatesAdded) 个提示词模板；保留 \(conversationsKept) 段已有对话。"
+        "新增 \(profilesAdded) 个连接、\(conversationsAdded) 段对话、\(draftsAdded) 份草稿、\(imagesAdded) 张图片、\(templatesAdded) 个提示词模板和 \(projectsAdded) 个项目；保留 \(conversationsKept) 段已有对话。"
     }
 }
 
@@ -131,8 +139,10 @@ struct BackupMerge {
         var images: [String: Data] = [:]
         var profileMap: [UUID: UUID] = [:]
         var conversationMap: [UUID: UUID] = [:]
+        var projectMap: [UUID: [UUID: UUID]] = [:]
         var kept = 0
         var templatesAdded = 0
+        var projectsAdded = 0
         for profile in archive.profiles {
             let endpoint = try identity(profile)
             // Only the same installation can match an original ID. Fresh imports receive stable IDs.
@@ -146,6 +156,7 @@ struct BackupMerge {
                 imported.id = target
                 imported.name = String(profile.name.prefix(60)) + "（已导入）"
                 imported.templates = []
+                imported.projects = []
                 profiles.append(imported)
             }
             guard let index = profiles.firstIndex(where: { $0.id == target }) else { throw BackupError.invalidFile }
@@ -161,6 +172,18 @@ struct BackupMerge {
             }
             try PromptTemplate.validateCollection(templates)
             profiles[index].templates = templates
+            var projects = profiles[index].projects
+            for project in profile.projects {
+                let projectID = original != nil ? project.id : stableID([archive.installationID.uuidString, project.id.uuidString, target.uuidString, "project"])
+                projectMap[profile.id, default: [:]][project.id] = projectID
+                if projects.contains(where: { $0.id == projectID }) { continue }
+                var imported = project
+                imported.id = projectID
+                projects.append(imported)
+                projectsAdded += 1
+            }
+            try LocalProject.validateCollection(projects)
+            profiles[index].projects = projects
         }
         for conversation in archive.conversations {
             guard let sourceProfile = conversation.profileID, let targetProfile = profileMap[sourceProfile] else { throw BackupError.invalidFile }
@@ -171,6 +194,10 @@ struct BackupMerge {
             var imported = conversation
             imported.id = targetID
             imported.profileID = targetProfile
+            if let projectID = conversation.projectID {
+                guard let targetProject = projectMap[sourceProfile]?[projectID] else { throw BackupError.invalidFile }
+                imported.projectID = targetProject
+            }
             for index in imported.messages.indices {
                 guard let imageID = imported.messages[index].imageID,
                       let data = archive.images[imageID.uuidString] else { continue }
@@ -198,7 +225,7 @@ struct BackupMerge {
                            report: BackupImportReport(profilesAdded: profiles.count - library.profiles.count,
                                                       conversationsAdded: records.count - conversations.count,
                                                       conversationsKept: kept, draftsAdded: draftsAdded, imagesAdded: images.count,
-                                                      templatesAdded: templatesAdded))
+                                                      templatesAdded: templatesAdded, projectsAdded: projectsAdded))
     }
 
     private static func identity(_ profile: ConnectionProfile) throws -> String {

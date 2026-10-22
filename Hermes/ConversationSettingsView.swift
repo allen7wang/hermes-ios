@@ -16,6 +16,7 @@ struct ConversationSettingsView: View {
     @State private var title = ""
     @State private var tags = ""
     @State private var configuration = ConversationConfiguration()
+    @State private var project: ProjectFilter = .unassigned
     @State private var error: String?
     @State private var loaded = false
 
@@ -23,8 +24,11 @@ struct ConversationSettingsView: View {
     private var canSave: Bool {
         !contextChanged && !model.isSending && !model.needsRecovery &&
         (try? configuration.validated()) != nil && (try? ConversationWorkspace.normalizedTags(tags)) != nil &&
-        (conversationID == nil || (!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= 80))
+        (conversationID == nil || (!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= 80)) &&
+        (selectedProjectID == nil || model.projects.contains(where: { $0.id == selectedProjectID }))
     }
+    private var selectedProjectID: UUID? { if case .project(let id) = project { id } else { nil } }
+    private var selectedProject: LocalProject? { model.projects.first { $0.id == selectedProjectID } }
 
     var body: some View {
         NavigationStack {
@@ -41,6 +45,18 @@ struct ConversationSettingsView: View {
                         TextField("标签，以逗号分隔", text: $tags).accessibilityIdentifier("conversation-tags")
                         Text("最多 8 个标签，每个最多 20 字符。归档不会删除消息、图片或草稿。")
                             .font(.caption).foregroundStyle(HermesTheme.muted)
+                    }.listRowBackground(HermesTheme.surface)
+                    Section {
+                        Picker("所属项目", selection: $project) {
+                            Text("未分配到项目").tag(ProjectFilter.unassigned)
+                            ForEach(model.projects) { value in Text(value.name).tag(ProjectFilter.project(value.id)) }
+                        }.accessibilityIdentifier("conversation-project")
+                        if let selectedProject, !selectedProject.instructions.isEmpty {
+                            Label("保存后将使用「\(selectedProject.name)」的项目指令", systemImage: "text.alignleft")
+                                .font(.caption).foregroundStyle(HermesTheme.accent)
+                        }
+                    } header: { Text("项目归属") } footer: {
+                        Text("更改归属会保留消息、草稿和对话设置。项目指令在下次请求时生效，不会读取同项目其他对话的消息。")
                     }.listRowBackground(HermesTheme.surface)
                 }
                 Section {
@@ -83,7 +99,8 @@ struct ConversationSettingsView: View {
                     Button("保存") {
                         do {
                             try model.saveConversationSettings(title: title, tags: tags, configuration: configuration,
-                                                               expectedDraftKey: draftKey, profileID: profileID)
+                                                               expectedDraftKey: draftKey, profileID: profileID,
+                                                               project: conversationID == nil ? nil : project)
                             dismiss()
                         } catch { self.error = error.localizedDescription }
                     }.disabled(!canSave).accessibilityIdentifier("save-conversation-settings")
@@ -98,6 +115,7 @@ struct ConversationSettingsView: View {
                 title = model.selectedConversation?.title ?? ""
                 tags = model.selectedConversation?.workspaceState.tags.joined(separator: "，") ?? ""
                 configuration = model.conversationConfiguration
+                project = model.selectedConversation?.projectID.map(ProjectFilter.project) ?? .unassigned
             }
         }.tint(HermesTheme.accent).preferredColorScheme(.dark)
     }

@@ -10,6 +10,7 @@ struct HistoryView: View {
     @State private var scope: ConversationScope = .active
     @State private var sort: ConversationSort = .recent
     @State private var tag: String?
+    @State private var project: ProjectFilter = .all
     @State private var selecting = false
     @State private var selected = Set<UUID>()
     @State private var deleting = Set<UUID>()
@@ -20,12 +21,22 @@ struct HistoryView: View {
     @State private var document: ConversationDocument?
     @State private var exporting = false
     @State private var showingConnections = false
+    @State private var showingProjects = false
+    @State private var moveTarget: ProjectMoveTarget?
     @State private var exportName = "Hermes-对话"
 
+    init(embedded: Bool = false, initialProject: ProjectFilter = .all, onOpen: (() -> Void)? = nil) {
+        self.embedded = embedded
+        self.onOpen = onOpen
+        _project = State(initialValue: initialProject)
+    }
+
     private var visible: [Conversation] {
-        ConversationWorkbench.filtered(records, scope: scope, query: query, tag: tag, sort: sort)
+        ConversationWorkbench.filtered(records, scope: scope, query: query, tag: tag, sort: sort, project: project)
     }
     private var records: [Conversation] { scope == .trash ? model.trashedConversations : model.conversations }
+    private var projectConversations: [Conversation] { model.conversations.filter(matchesProject) }
+    private var projectTrash: [Conversation] { model.trashedConversations.filter(matchesProject) }
     private var tags: [String] { Array(Set(records.flatMap { $0.workspaceState.tags })).sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
     private var visibleIDs: Set<UUID> { Set(visible.map(\.id)) }
     private var undoIDs: Set<UUID> { recentlyTrashed.intersection(Set(model.trashedConversations.map(\.id))) }
@@ -37,6 +48,15 @@ struct HistoryView: View {
         }
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .sheet(isPresented: $showingConnections) { SettingsView() }
+        .sheet(isPresented: $showingProjects) {
+            ProjectWorkspaceView {
+                showingProjects = false
+                openChat()
+            }
+        }
+        .sheet(item: $moveTarget) { target in
+            ProjectAssignmentView(target: target) { selected = []; moveTarget = nil }
+        }
         .sheet(item: $trashPreview) { record in TrashConversationView(conversationID: record.id) }
         .sheet(item: $settingsTarget) { target in
             ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
@@ -54,8 +74,11 @@ struct HistoryView: View {
             if case .failure(let error) = result { model.errorMessage = error.localizedDescription }
         }
         .onChange(of: visibleIDs) { _, ids in selected.formIntersection(ids) }
-        .onChange(of: model.activeProfileID) { _, _ in query = ""; tag = nil; scope = .active; selected = []; selecting = false; recentlyTrashed = [] }
+        .onChange(of: model.activeProfileID) { _, _ in query = ""; tag = nil; project = .all; scope = .active; selected = []; selecting = false; recentlyTrashed = []; moveTarget = nil; showingProjects = false }
         .onChange(of: tags) { _, values in if let tag, !values.contains(tag) { self.tag = nil } }
+        .onChange(of: model.projects) { _, values in
+            if case .project(let id) = project, !values.contains(where: { $0.id == id }) { project = .all }
+        }
     }
 
     private var content: some View {
@@ -78,19 +101,38 @@ struct HistoryView: View {
                         }.buttonStyle(.plain)
                     }
                     HStack(spacing: 10) {
-                        metric("进行中", count: model.conversations.filter { !$0.isArchived }.count, icon: "bubble.left.and.bubble.right", target: .active)
-                        metric("已置顶", count: model.conversations.filter { !$0.isArchived && $0.isPinned }.count, icon: "pin", target: .pinned)
-                        metric("已归档", count: model.conversations.filter(\.isArchived).count, icon: "archivebox", target: .archived)
-                        metric("回收站", count: model.trashedConversations.count, icon: "trash", target: .trash)
+                        metric("进行中", count: projectConversations.filter { !$0.isArchived }.count, icon: "bubble.left.and.bubble.right", target: .active)
+                        metric("已置顶", count: projectConversations.filter { !$0.isArchived && $0.isPinned }.count, icon: "pin", target: .pinned)
+                        metric("已归档", count: projectConversations.filter(\.isArchived).count, icon: "archivebox", target: .archived)
+                        metric("回收站", count: projectTrash.count, icon: "trash", target: .trash)
                     }
                     Button(action: newConversation) {
                         HStack { Label("开始新对话", systemImage: "square.and.pencil"); Spacer(); Image(systemName: "arrow.up.right") }
                             .font(.subheadline.weight(.semibold)).padding(14)
                             .foregroundStyle(HermesTheme.background).background(HermesTheme.accent, in: RoundedRectangle(cornerRadius: 12))
                     }.buttonStyle(.plain).disabled(model.isSending || model.needsRecovery).accessibilityIdentifier("workbench-new-chat")
+                    if case .project = project {
+                        Text("将在「\(projectLabel)」创建并保存一段独立对话，打开后手动发送。")
+                            .font(.caption).foregroundStyle(HermesTheme.muted)
+                    }
                 }.padding(.vertical, 8)
             }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             Section {
+                HStack(spacing: 12) {
+                    Menu {
+                        Picker("项目范围", selection: $project) {
+                            Text("全部项目").tag(ProjectFilter.all)
+                            Text("未分配").tag(ProjectFilter.unassigned)
+                            ForEach(model.projects) { value in Text(value.name).tag(ProjectFilter.project(value.id)) }
+                        }
+                    } label: {
+                        HStack(spacing: 6) { Image(systemName: "folder"); Text(projectLabel).lineLimit(1); Image(systemName: "chevron.down").font(.caption2) }
+                            .font(.subheadline.weight(.medium)).foregroundStyle(HermesTheme.accent)
+                    }.accessibilityLabel("筛选项目，\(projectLabel)").accessibilityIdentifier("workbench-project-filter")
+                    Spacer(minLength: 8)
+                    Button("管理项目") { showingProjects = true }.font(.caption.weight(.medium))
+                        .accessibilityIdentifier("workbench-manage-projects")
+                }.padding(.vertical, 4).listRowBackground(Color.clear)
                 Picker("对话范围", selection: $scope) { ForEach(ConversationScope.allCases) { Text($0.title).tag($0) } }
                     .pickerStyle(.segmented).listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
                 if !tags.isEmpty {
@@ -129,7 +171,7 @@ struct HistoryView: View {
                                 Image(systemName: selected.contains(conversation.id) ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(selected.contains(conversation.id) ? HermesTheme.accent : HermesTheme.muted)
                             }
-                            WorkspaceConversationRow(conversation: conversation)
+                            WorkspaceConversationRow(conversation: conversation, projectName: model.project(for: conversation)?.name)
                         }
                     }
                     .buttonStyle(.plain).disabled(model.isSending)
@@ -175,6 +217,10 @@ struct HistoryView: View {
                         selected = []
                     }
                     Button("导出", systemImage: "square.and.arrow.up") { export(visible.filter { selected.contains($0.id) }) }
+                    if scope != .trash {
+                        Button("项目", systemImage: "folder") { requestMove(selected) }
+                            .accessibilityLabel("将所选对话移动到项目")
+                    }
                     Spacer()
                     Button(scope == .trash ? "彻底删除" : "移到回收站", systemImage: "trash", role: .destructive) {
                         if scope == .trash { requestPermanentDeletion(selected) }
@@ -215,7 +261,27 @@ struct HistoryView: View {
                 .foregroundStyle(tag == value ? HermesTheme.accent : HermesTheme.muted)
         }.buttonStyle(.plain)
     }
-    private func newConversation() { model.newConversation(); openChat() }
+    private var projectLabel: String {
+        switch project {
+        case .all: "全部项目"
+        case .unassigned: "未分配"
+        case .project(let id): model.projects.first { $0.id == id }?.name ?? "全部项目"
+        }
+    }
+    private func matchesProject(_ conversation: Conversation) -> Bool {
+        switch project {
+        case .all: true
+        case .unassigned: conversation.projectID == nil
+        case .project(let id): conversation.projectID == id
+        }
+    }
+    private func newConversation() {
+        do {
+            if case .project(let id) = project { _ = try model.startProjectConversation(id, profileID: model.activeProfileID) }
+            else { model.newConversation() }
+            openChat()
+        } catch { model.errorMessage = error.localizedDescription }
+    }
     @ViewBuilder private func recordActions(_ conversation: Conversation) -> some View {
         if conversation.isTrashed {
             Button("查看原消息", systemImage: "eye") { trashPreview = conversation }
@@ -223,6 +289,7 @@ struct HistoryView: View {
             Button("彻底删除", systemImage: "trash", role: .destructive) { requestPermanentDeletion([conversation.id]) }
         } else {
             Button("对话设置与标签", systemImage: "tag") { edit(conversation) }
+            Button("移动到项目", systemImage: "folder") { requestMove([conversation.id]) }
             Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { model.togglePin(conversation.id) }
             Button(conversation.isArchived ? "取消归档" : "归档", systemImage: "archivebox") {
                 perform { try model.setArchived([conversation.id], archived: !conversation.isArchived) }
@@ -232,6 +299,7 @@ struct HistoryView: View {
         Button("导出 Markdown", systemImage: "square.and.arrow.up") { export([conversation]) }
     }
     private func requestPermanentDeletion(_ ids: Set<UUID>) { deleting = ids; confirmingPermanentDeletion = true }
+    private func requestMove(_ ids: Set<UUID>) { moveTarget = ProjectMoveTarget(conversationIDs: ids, profileID: model.activeProfileID) }
     private func moveToTrash(_ ids: Set<UUID>) {
         perform { try model.deleteConversations(ids); recentlyTrashed = ids; selected.subtract(ids) }
     }
@@ -249,6 +317,7 @@ struct HistoryView: View {
 
 private struct WorkspaceConversationRow: View {
     let conversation: Conversation
+    var projectName: String? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 7) {
@@ -263,6 +332,9 @@ private struct WorkspaceConversationRow: View {
             if !conversation.workspaceState.tags.isEmpty {
                 Text(conversation.workspaceState.tags.map { "#" + $0 }.joined(separator: "  "))
                     .font(.caption).foregroundStyle(HermesTheme.accent).lineLimit(1)
+            }
+            if let projectName {
+                Label(projectName, systemImage: "folder").font(.caption).foregroundStyle(HermesTheme.accent).lineLimit(1)
             }
             HStack {
                 Text("\(conversation.messages.count) 条消息")

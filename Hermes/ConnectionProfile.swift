@@ -10,6 +10,12 @@ struct ConnectionProfile: Identifiable, Codable, Equatable {
     var model: String
     var promptTemplates: [PromptTemplate]?
     var conversationDefaults: ConversationConfiguration?
+    var localProjects: [LocalProject]?
+
+    var projects: [LocalProject] {
+        get { localProjects ?? [] }
+        set { localProjects = newValue.isEmpty ? nil : newValue }
+    }
 
     var templates: [PromptTemplate] {
         get { promptTemplates ?? [] }

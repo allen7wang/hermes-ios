@@ -10,6 +10,7 @@ struct ChatContextPreviewView: View {
     private var stale: Bool {
         preview.profileID != model.activeProfileID || preview.draftKey != model.draftKey ||
         preview.rawText != model.draft || preview.plan.configuration != model.conversationConfiguration ||
+        preview.plan.project != model.currentProject ||
         preview.fallbackModel != model.settings.model ||
         preview.sourceIDs != (model.selectedConversation?.messages ?? []).map(\.id)
     }
@@ -21,6 +22,10 @@ struct ChatContextPreviewView: View {
                     Label("检查这次要带给 Hermes 的内容", systemImage: "eye")
                         .foregroundStyle(HermesTheme.accent)
                     LabeledContent("发送到", value: preview.profileName)
+                    if let project = preview.plan.project {
+                        LabeledContent("所属项目", value: project.name)
+                        LabeledContent("项目指令", value: project.instructions.isEmpty ? "未设置" : "已带入本次请求")
+                    }
                     LabeledContent("请求模型", value: preview.effectiveModel)
                     if !preview.plan.configuration.provider.isEmpty {
                         LabeledContent("供应商", value: preview.plan.configuration.provider)
@@ -37,10 +42,14 @@ struct ChatContextPreviewView: View {
                             .foregroundStyle(.orange)
                     }.listRowBackground(HermesTheme.surface)
                 }
-                if !preview.plan.configuration.systemPrompt.isEmpty {
-                    Section("额外系统指令") {
+                if !preview.plan.effectiveSystemPrompt.isEmpty {
+                    Section("本次实际系统指令") {
                         DisclosureGroup("查看完整系统提示词") {
-                            Text(preview.plan.configuration.systemPrompt).font(.subheadline).textSelection(.enabled)
+                            Text(preview.plan.effectiveSystemPrompt).font(.subheadline).textSelection(.enabled)
+                        }
+                        if preview.plan.project?.instructions.isEmpty == false {
+                            Text("先带入项目指令，再带入这段对话的额外指令。项目说明和其他对话不会自动带入。")
+                                .font(.caption).foregroundStyle(HermesTheme.muted)
                         }
                     }.listRowBackground(HermesTheme.surface)
                 }

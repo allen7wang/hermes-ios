@@ -43,6 +43,17 @@ final class AppModel: ObservableObject {
     let draftStore: DraftStore
 
     var activeProfileName: String { profiles.first { $0.id == activeProfileID }?.name ?? "Hermes" }
+    var projects: [LocalProject] {
+        (profiles.first { $0.id == activeProfileID }?.projects ?? []).sorted {
+            $0.updatedAt == $1.updatedAt ? $0.id.uuidString < $1.id.uuidString : $0.updatedAt > $1.updatedAt
+        }
+    }
+    var currentProject: LocalProject? { selectedConversation.flatMap { project(for: $0) } }
+
+    func project(for conversation: Conversation) -> LocalProject? {
+        guard let projectID = conversation.projectID else { return nil }
+        return profiles.first { $0.id == conversation.profileID }?.projects.first { $0.id == projectID }
+    }
     var draftKey: String { DraftStore.localKey(profileID: activeProfileID, conversationID: selectedID) }
 
     var needsRecovery: Bool { storageLoadFailed || !draftStore.isReadable }
@@ -98,6 +109,7 @@ final class AppModel: ObservableObject {
         do {
             for profile in savedProfiles {
                 try PromptTemplate.validateCollection(profile.templates)
+                try LocalProject.validateCollection(profile.projects)
                 if let value = profile.conversationDefaults, try value.validated() != value { throw WorkspaceError.invalidConfiguration }
             }
         }
@@ -110,7 +122,12 @@ final class AppModel: ObservableObject {
                     if migrated.profileID == nil { migrated.profileID = savedProfiles[0].id }
                     return migrated
                 }
-                for conversation in allConversations { try conversation.workspaceState.validate() }
+                for conversation in allConversations {
+                    try conversation.workspaceState.validate()
+                    if let projectID = conversation.projectID {
+                        guard savedProfiles.first(where: { $0.id == conversation.profileID })?.projects.contains(where: { $0.id == projectID }) == true else { throw ProjectError.missing }
+                    }
+                }
             } catch {
                 storageLoadFailed = true
                 errorMessage = "本机对话文件无法读取，已保留原文件。请先恢复备份再发送消息。"
@@ -142,7 +159,8 @@ final class AppModel: ObservableObject {
             model: connection.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "hermes-agent" : connection.model.trimmingCharacters(in: .whitespacesAndNewlines),
             promptTemplates: keepsIdentity ? existing?.promptTemplates : nil,
-            conversationDefaults: keepsIdentity ? existing?.conversationDefaults : nil
+            conversationDefaults: keepsIdentity ? existing?.conversationDefaults : nil,
+            localProjects: keepsIdentity ? existing?.localProjects : nil
         )
         guard !profile.name.isEmpty else { throw ProfileError.missingName }
         try credentials.save(connection.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), account: profile.credentialAccount)
@@ -211,6 +229,84 @@ final class AppModel: ObservableObject {
             try data.write(to: directory.appendingPathComponent("connections.json"), options: .atomic)
             defaults.set(data, forKey: "connectionLibrary")
         } catch { errorMessage = "连接保存失败：\(error.localizedDescription)" }
+    }
+
+    private func requireProjectAccess(profileID: UUID) throws {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard !isSending else { throw WorkspaceError.busy }
+        guard activeProfileID == profileID, profiles.contains(where: { $0.id == profileID }) else { throw ProjectError.changedContext }
+    }
+
+    @discardableResult
+    func saveProject(id: UUID?, name: String, summary: String, instructions: String, profileID: UUID) throws -> UUID {
+        try requireProjectAccess(profileID: profileID)
+        guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }) else { throw ProjectError.changedContext }
+        var candidate = profiles
+        var projects = candidate[profileIndex].projects
+        let existing = id.flatMap { id in projects.first { $0.id == id } }
+        if id != nil && existing == nil { throw ProjectError.missing }
+        guard existing != nil || projects.count < LocalProject.collectionLimit else { throw ProjectError.limit }
+        let now = Date()
+        let project = try LocalProject(id: existing?.id ?? UUID(), name: name, summary: summary, instructions: instructions,
+            createdAt: existing?.createdAt ?? now, updatedAt: now).validated()
+        if let index = projects.firstIndex(where: { $0.id == project.id }) { projects[index] = project }
+        else { projects.append(project) }
+        try LocalProject.validateCollection(projects)
+        candidate[profileIndex].projects = projects
+        let library = ConnectionLibrary(profiles: candidate, activeID: activeProfileID, selectedConversations: selectedConversations)
+        let data = try JSONEncoder().encode(library)
+        try data.write(to: directory.appendingPathComponent("connections.json"), options: .atomic)
+        defaults.set(data, forKey: "connectionLibrary")
+        profiles = candidate
+        return project.id
+    }
+
+    func deleteProject(_ id: UUID, profileID: UUID) throws {
+        try requireProjectAccess(profileID: profileID)
+        guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }),
+              profiles[profileIndex].projects.contains(where: { $0.id == id }) else { throw ProjectError.missing }
+        var candidateProfiles = profiles
+        var projects = candidateProfiles[profileIndex].projects
+        projects.removeAll { $0.id == id }
+        candidateProfiles[profileIndex].projects = projects
+        var candidateConversations = allConversations
+        for index in candidateConversations.indices where candidateConversations[index].profileID == profileID && candidateConversations[index].projectID == id {
+            candidateConversations[index].projectID = nil
+        }
+        let library = ConnectionLibrary(profiles: candidateProfiles, activeID: activeProfileID, selectedConversations: selectedConversations)
+        let state = BackupRestoreState(library: library, conversations: candidateConversations, drafts: try draftStore.snapshot(), images: [:])
+        do {
+            try BackupRestoreTransaction.commit(state, directory: directory, defaults: defaults)
+            try draftStore.reload()
+        } catch {
+            // A partial transaction is recovered from the journal on next launch.
+            storageLoadFailed = true
+            throw error
+        }
+        profiles = candidateProfiles
+        allConversations = candidateConversations
+        refreshConversations()
+    }
+
+    func assignConversations(_ ids: Set<UUID>, toProject projectID: UUID?, profileID: UUID) throws {
+        try requireProjectAccess(profileID: profileID)
+        try requireWorkspaceAccess(ids)
+        if let projectID, !projects.contains(where: { $0.id == projectID }) { throw ProjectError.missing }
+        var candidate = allConversations
+        for index in candidate.indices where ids.contains(candidate[index].id) { candidate[index].projectID = projectID }
+        try commitConversations(candidate)
+    }
+
+    @discardableResult
+    func startProjectConversation(_ id: UUID, profileID: UUID) throws -> UUID {
+        try requireProjectAccess(profileID: profileID)
+        guard projects.contains(where: { $0.id == id }) else { throw ProjectError.missing }
+        let workspace = ConversationWorkspace(configuration: profiles.first { $0.id == profileID }?.conversationDefaults ?? ConversationConfiguration())
+        let conversation = Conversation(title: "新对话", messages: [], updatedAt: Date(), profileID: profileID,
+            workspace: workspace.isDefault ? nil : workspace, projectID: id)
+        // Persist the empty conversation and its selection together before changing the composer.
+        try commitWorkspaceTransaction([conversation] + allConversations, texts: draftStore.snapshot(), selectedID: conversation.id)
+        return conversation.id
     }
 
     func checkConnection() async {
@@ -327,10 +423,12 @@ final class AppModel: ObservableObject {
     }
 
     func saveConversationSettings(title: String, tags: String, configuration: ConversationConfiguration,
-                                  expectedDraftKey: String, profileID: UUID) throws {
+                                  expectedDraftKey: String, profileID: UUID, project: ProjectFilter? = nil) throws {
         guard !needsRecovery else { throw ProfileError.storageUnavailable }
         guard !isSending else { throw WorkspaceError.busy }
         guard expectedDraftKey == draftKey, profileID == activeProfileID else { throw WorkspaceError.changedContext }
+        if project != nil && selectedID == nil { throw WorkspaceError.changedContext }
+        if case .project(let id) = project, !projects.contains(where: { $0.id == id }) { throw ProjectError.missing }
         let configuration = try configuration.validated()
         if let id = selectedID {
             guard let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == profileID }) else { throw WorkspaceError.missing }
@@ -342,6 +440,12 @@ final class AppModel: ObservableObject {
             workspace.configuration = configuration
             candidate[index].title = title
             candidate[index].workspace = workspace.isDefault ? nil : workspace
+            // nil and .all preserve membership; .unassigned explicitly removes it.
+            switch project {
+            case .project(let id): candidate[index].projectID = id
+            case .unassigned: candidate[index].projectID = nil
+            case .all, nil: break
+            }
             try commitConversations(candidate)
         } else {
             guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { throw WorkspaceError.changedContext }
@@ -563,7 +667,7 @@ final class AppModel: ObservableObject {
         let input = ChatMessage(role: .user, content: text, imageID: hasImage ? UUID() : nil)
         return ChatContextPreview(profileID: activeProfileID, draftKey: draftKey, profileName: activeProfileName,
             fallbackModel: settings.model, rawText: rawText, inputID: input.id, sourceIDs: source.map(\.id),
-            plan: try PreparedChatContext(messages: source + [input], configuration: conversationConfiguration))
+            plan: try PreparedChatContext(messages: source + [input], configuration: conversationConfiguration, project: currentProject))
     }
 
     func retryLastResponse() {
@@ -621,7 +725,7 @@ final class AppModel: ObservableObject {
         workspace.trashedAt = nil
         let branch = Conversation(title: String(source.title.prefix(75)) + " · 分支",
                                   messages: copies, updatedAt: Date(), profileID: activeProfileID,
-                                  workspace: workspace.isDefault ? nil : workspace)
+                                  workspace: workspace.isDefault ? nil : workspace, projectID: source.projectID)
         let candidate = [branch] + allConversations
         do {
             try JSONEncoder().encode(candidate).write(to: conversationsURL, options: .atomic)
@@ -679,6 +783,9 @@ final class AppModel: ObservableObject {
             if let imageID { ImageAttachmentStore.remove(imageID, directory: attachmentDirectory) }
             return false
         }
+        if candidate[index].messages.isEmpty && candidate[index].title == "新对话" {
+            candidate[index].title = text.isEmpty ? "图片对话" : String(text.prefix(38))
+        }
         candidate[index].messages.append(
             ChatMessage(role: .user, content: text, imageID: imageID)
         )
@@ -703,6 +810,7 @@ final class AppModel: ObservableObject {
         guard !conversation.isArchived else { errorMessage = WorkspaceError.archived.localizedDescription; return }
         let history = conversation.messages
         let configuration = conversation.workspaceState.configuration
+        let project = project(for: conversation)
         let connection = settings
         isSending = true
         streamedReply = ""
@@ -717,7 +825,7 @@ final class AppModel: ObservableObject {
             }
             do {
                 let reply = try await HermesClient(settings: connection, sessionConfiguration: sessionConfiguration, attachmentDirectory: attachmentDirectory).stream(
-                    messages: history, configuration: configuration
+                    messages: history, configuration: configuration, project: project
                 ) { event in
                     await MainActor.run {
                         switch event {

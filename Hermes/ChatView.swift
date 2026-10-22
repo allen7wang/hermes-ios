@@ -32,6 +32,7 @@ struct ChatView: View {
     @State private var exportDocument: ConversationDocument?
     @State private var exporting = false
     @State private var contextPreview: ChatContextPreview?
+    @State private var showingProjects = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -110,6 +111,9 @@ struct ChatView: View {
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .sheet(item: $contextPreview) { preview in
             ChatContextPreviewView(preview: preview, pendingImage: pendingImage)
+        }
+        .sheet(isPresented: $showingProjects) {
+            ProjectWorkspaceView { showingProjects = false }
         }
         .sheet(item: $settingsTarget) { target in
             ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
@@ -225,15 +229,27 @@ struct ChatView: View {
                 .accessibilityLabel("连接状态：\(connectionLabel)，点按重新检测")
             }
             Spacer()
-            Button { model.newConversation() } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 18))
-                    .frame(width: 42, height: 42)
+            if let project = model.currentProject {
+                Menu {
+                    Button("在当前项目新建对话", systemImage: "folder.badge.plus") {
+                        performLocalAction { _ = try model.startProjectConversation(project.id, profileID: model.activeProfileID) }
+                    }.accessibilityIdentifier("chat-new-project-conversation")
+                    Button("开始未分配的新对话", systemImage: "square.and.pencil") { model.newConversation() }
+                } label: {
+                    Image(systemName: "square.and.pencil").font(.system(size: 18)).frame(width: 42, height: 42)
+                }.disabled(model.isSending || model.needsRecovery).accessibilityLabel("新对话选项")
+            } else {
+                Button { model.newConversation() } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 18))
+                        .frame(width: 42, height: 42)
+                }
+                .disabled(model.isSending)
+                .accessibilityLabel("新对话")
             }
-            .disabled(model.isSending)
-            .accessibilityLabel("新对话")
             Menu {
                 Button("对话工作台", systemImage: "rectangle.grid.1x2") { showingHistory = true }
+                Button("项目工作区", systemImage: "folder") { showingProjects = true }
                 Button("对话设置与标签", systemImage: "slider.horizontal.3") { openConfiguration() }
                     .disabled(model.isSending)
                 if let conversation = model.selectedConversation {
@@ -262,14 +278,23 @@ struct ChatView: View {
 
     private var configurationBar: some View {
         Button(action: openConfiguration) {
-            HStack(spacing: 8) {
-                Image(systemName: "slider.horizontal.3")
-                Text(model.conversationConfiguration.model.isEmpty ? model.settings.model : model.conversationConfiguration.model).lineLimit(1)
-                if !model.conversationConfiguration.systemPrompt.isEmpty { Image(systemName: "text.alignleft").accessibilityLabel("已设置系统提示词") }
-                Spacer(minLength: 4)
-                Text(model.conversationConfiguration.contextLabel).lineLimit(1)
-                Image(systemName: "chevron.down").font(.caption2)
-            }.font(.caption).foregroundStyle(HermesTheme.muted).padding(.horizontal, 20).padding(.vertical, 10)
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    Image(systemName: "slider.horizontal.3")
+                    Text(model.conversationConfiguration.model.isEmpty ? model.settings.model : model.conversationConfiguration.model).lineLimit(1)
+                    if !model.conversationConfiguration.systemPrompt.isEmpty { Image(systemName: "text.alignleft").accessibilityLabel("已设置系统提示词") }
+                    Spacer(minLength: 4)
+                    Text(model.conversationConfiguration.contextLabel).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2)
+                }.foregroundStyle(HermesTheme.muted)
+                if let project = model.currentProject {
+                    HStack(spacing: 6) {
+                        Label(project.name, systemImage: "folder").lineLimit(1)
+                        Spacer(minLength: 4)
+                        if !project.instructions.isEmpty { Text("项目指令生效").font(.caption2) }
+                    }.foregroundStyle(HermesTheme.accent).accessibilityIdentifier("chat-project-indicator")
+                }
+            }.font(.caption).padding(.horizontal, 20).padding(.vertical, 10)
         }.buttonStyle(.plain).disabled(model.isSending || model.needsRecovery).accessibilityLabel("对话设置，\(model.conversationConfiguration.contextLabel)")
     }
 

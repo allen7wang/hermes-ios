@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AppShell: View {
     @EnvironmentObject private var model: AppModel
-    private enum Section: Hashable { case conversations, server, library, settings }
+    private enum Section: Hashable { case conversations, projects, server, library, settings }
     @State private var section: Section = .conversations
     @State private var showingChat = false
     @State private var libraryTarget: LocalMessageTarget?
@@ -18,6 +18,11 @@ struct AppShell: View {
                             .toolbar(.hidden, for: .tabBar)
                     }
             }.tabItem { Label("对话", systemImage: "bubble.left.and.bubble.right") }.tag(Section.conversations)
+            ProjectWorkspaceView(embedded: true) {
+                libraryTarget = nil
+                section = .conversations
+                showingChat = true
+            }.tabItem { Label("项目", systemImage: "folder") }.tag(Section.projects)
             RemoteWorkspaceView(embedded: true)
                 .tabItem { Label("服务端", systemImage: "server.rack") }.tag(Section.server)
             MessageLibraryView(embedded: true) { target in
