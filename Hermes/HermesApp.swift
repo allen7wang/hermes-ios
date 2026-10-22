@@ -6,7 +6,7 @@ struct HermesApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ChatView()
+            AppShell()
                 .environmentObject(model)
                 .preferredColorScheme(.dark)
         }

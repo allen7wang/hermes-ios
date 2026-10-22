@@ -90,6 +90,7 @@ struct RemoteSessionDetailView: View {
         .background(HermesTheme.background)
         .navigationTitle(conversation.session.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {

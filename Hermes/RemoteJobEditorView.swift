@@ -4,6 +4,7 @@ struct RemoteJobEditorView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let job: RemoteJob?
+    var copying = false
     let onSave: () -> Void
     @State private var name = ""
     @State private var prompt = ""
@@ -15,14 +16,14 @@ struct RemoteJobEditorView: View {
         let values = ["name": name.trimmingCharacters(in: .whitespacesAndNewlines),
                       "prompt": prompt.trimmingCharacters(in: .whitespacesAndNewlines),
                       "schedule": schedule.trimmingCharacters(in: .whitespacesAndNewlines)]
-        guard let job else { return values }
+        guard let job, !copying else { return values }
         let original = ["name": job.name, "prompt": job.prompt ?? "", "schedule": job.editableSchedule]
         return values.filter { original[$0.key] != $0.value }
     }
 
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && name.count <= 200 &&
-        (job != nil || !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && prompt.count <= 5000 &&
+        ((job != nil && !copying) || !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && prompt.count <= 5000 &&
         !schedule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !fields.isEmpty && !saving
     }
 
@@ -42,20 +43,20 @@ struct RemoteJobEditorView: View {
                         .font(.caption).foregroundStyle(HermesTheme.muted)
                 }
                 Section {
-                    Text(job == nil ? "任务由 Hermes 服务端调度。" : "保存后会更新服务端任务；修改日程会重新计算下次运行时间。")
+                    Text(copying ? "复制会创建一项独立的新任务，请检查说明与日程后创建。一次性任务必须重新填写时间；运行结果、错误和投递设置不会复制。" : job == nil ? "任务由 Hermes 服务端调度。" : "保存后会更新服务端任务；修改日程会重新计算下次运行时间。")
                         .font(.caption).foregroundStyle(HermesTheme.muted)
                 }
             }
             .disabled(saving)
             .scrollContentBackground(.hidden)
             .background(HermesTheme.background)
-            .navigationTitle(job == nil ? "新建定时任务" : "编辑定时任务")
+            .navigationTitle(copying ? "复制定时任务" : job == nil ? "新建定时任务" : "编辑定时任务")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("取消") { dismiss() }.disabled(saving) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await save() } } label: {
-                        if saving { ProgressView() } else { Text(job == nil ? "创建" : "保存") }
+                        if saving { ProgressView() } else { Text(job == nil || copying ? "创建" : "保存") }
                     }.disabled(!canSave)
                 }
             }
@@ -69,7 +70,12 @@ struct RemoteJobEditorView: View {
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled(saving)
         .onAppear {
-            if let job { name = job.name; prompt = job.prompt ?? ""; schedule = job.editableSchedule }
+            if let job {
+                if copying {
+                    let draft = RemoteJobDraft(copying: job)
+                    name = draft.name; prompt = draft.prompt; schedule = draft.schedule
+                } else { name = job.name; prompt = job.prompt ?? ""; schedule = job.editableSchedule }
+            }
         }
     }
 
@@ -80,7 +86,7 @@ struct RemoteJobEditorView: View {
         defer { saving = false }
         do {
             let client = HermesClient(settings: model.settings)
-            if let job {
+            if let job, !copying {
                 _ = try await client.updateJob(job.id, fields: changedFields)
             } else {
                 _ = try await client.createJob(name: changedFields["name"]!, schedule: changedFields["schedule"]!,

@@ -52,6 +52,11 @@ final class AppModel: ObservableObject {
         conversations.first { $0.id == selectedID }
     }
 
+    var conversationConfiguration: ConversationConfiguration {
+        if let conversation = selectedConversation { return conversation.workspaceState.configuration }
+        return profiles.first { $0.id == activeProfileID }?.conversationDefaults ?? ConversationConfiguration()
+    }
+
     init(defaults: UserDefaults = .standard, directory: URL? = nil,
          credentials: CredentialStore = SystemCredentialStore(),
          sessionConfiguration: URLSessionConfiguration = .ephemeral) {
@@ -89,7 +94,12 @@ final class AppModel: ObservableObject {
             storageLoadFailed = true
             errorMessage = ProfileError.storageUnavailable.localizedDescription
         }
-        do { for profile in savedProfiles { try PromptTemplate.validateCollection(profile.templates) } }
+        do {
+            for profile in savedProfiles {
+                try PromptTemplate.validateCollection(profile.templates)
+                if let value = profile.conversationDefaults, try value.validated() != value { throw WorkspaceError.invalidConfiguration }
+            }
+        }
         catch { storageLoadFailed = true; errorMessage = ProfileError.storageUnavailable.localizedDescription }
         if FileManager.default.fileExists(atPath: conversationsURL.path) {
             do {
@@ -99,6 +109,7 @@ final class AppModel: ObservableObject {
                     if migrated.profileID == nil { migrated.profileID = savedProfiles[0].id }
                     return migrated
                 }
+                for conversation in allConversations { try conversation.workspaceState.validate() }
             } catch {
                 storageLoadFailed = true
                 errorMessage = "本机对话文件无法读取，已保留原文件。请先恢复备份再发送消息。"
@@ -129,7 +140,8 @@ final class AppModel: ObservableObject {
             serverURL: connection.serverURL.trimmingCharacters(in: .whitespacesAndNewlines),
             model: connection.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? "hermes-agent" : connection.model.trimmingCharacters(in: .whitespacesAndNewlines),
-            promptTemplates: keepsIdentity ? existing?.promptTemplates : nil
+            promptTemplates: keepsIdentity ? existing?.promptTemplates : nil,
+            conversationDefaults: keepsIdentity ? existing?.conversationDefaults : nil
         )
         guard !profile.name.isEmpty else { throw ProfileError.missingName }
         try credentials.save(connection.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), account: profile.credentialAccount)
@@ -233,29 +245,102 @@ final class AppModel: ObservableObject {
     }
 
     func delete(_ id: UUID) {
-        guard !isSending, !storageLoadFailed else { return }
-        let removedImages = Set(conversations.first(where: { $0.id == id })?.messages.compactMap(\.imageID) ?? [])
-        allConversations.removeAll { $0.id == id && $0.profileID == activeProfileID }
-        removeUnusedImages(removedImages)
-        do { try draftStore.set("", for: DraftStore.localKey(profileID: activeProfileID, conversationID: id)) }
+        do { try deleteConversations([id]) }
         catch { errorMessage = error.localizedDescription }
+    }
+
+    private func requireWorkspaceAccess(_ ids: Set<UUID>) throws {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard !isSending else { throw WorkspaceError.busy }
+        guard !ids.isEmpty, ids.isSubset(of: Set(conversations.map(\.id))) else { throw WorkspaceError.missing }
+    }
+
+    private func commitConversations(_ candidate: [Conversation]) throws {
+        try JSONEncoder().encode(candidate).write(to: conversationsURL, options: .atomic)
+        allConversations = candidate
         refreshConversations()
-        if selectedID == id { selectedID = conversations.first?.id; rememberSelection() }
-        persist()
+    }
+
+    func setArchived(_ ids: Set<UUID>, archived: Bool) throws {
+        try requireWorkspaceAccess(ids)
+        var candidate = allConversations
+        for index in candidate.indices where ids.contains(candidate[index].id) {
+            var workspace = candidate[index].workspaceState
+            workspace.archived = archived
+            candidate[index].workspace = workspace.isDefault ? nil : workspace
+        }
+        try commitConversations(candidate)
+    }
+
+    func deleteConversations(_ ids: Set<UUID>) throws {
+        try requireWorkspaceAccess(ids)
+        let removedImages = Set(conversations.filter { ids.contains($0.id) }.flatMap { $0.messages.compactMap(\.imageID) })
+        let candidate = allConversations.filter { !ids.contains($0.id) }
+        var texts = try draftStore.snapshot()
+        for id in ids { texts.removeValue(forKey: DraftStore.localKey(profileID: activeProfileID, conversationID: id)) }
+        let nextID = selectedID.map { ids.contains($0) } == true
+            ? candidate.first { $0.profileID == activeProfileID && !$0.isArchived }?.id : selectedID
+        var selections = selectedConversations
+        selections[activeProfileID.uuidString] = nextID?.uuidString ?? ""
+        let library = ConnectionLibrary(profiles: profiles, activeID: activeProfileID, selectedConversations: selections)
+        do {
+            try BackupRestoreTransaction.commit(BackupRestoreState(library: library, conversations: candidate, drafts: texts, images: [:]), directory: directory, defaults: defaults)
+            try draftStore.reload()
+        } catch {
+            storageLoadFailed = true
+            throw error
+        }
+        allConversations = candidate
+        selectedConversations = selections
+        selectedID = nextID
+        refreshConversations()
+        draft = draftStore.text(for: draftKey)
+        removeUnusedImages(removedImages)
+    }
+
+    func saveConversationSettings(title: String, tags: String, configuration: ConversationConfiguration,
+                                  expectedDraftKey: String, profileID: UUID) throws {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard !isSending else { throw WorkspaceError.busy }
+        guard expectedDraftKey == draftKey, profileID == activeProfileID else { throw WorkspaceError.changedContext }
+        let configuration = try configuration.validated()
+        if let id = selectedID {
+            guard let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == profileID }) else { throw WorkspaceError.missing }
+            let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty, title.count <= 80 else { throw ProfileError.missingName }
+            var candidate = allConversations
+            var workspace = candidate[index].workspaceState
+            workspace.tags = try ConversationWorkspace.normalizedTags(tags)
+            workspace.configuration = configuration
+            candidate[index].title = title
+            candidate[index].workspace = workspace.isDefault ? nil : workspace
+            try commitConversations(candidate)
+        } else {
+            guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { throw WorkspaceError.changedContext }
+            var candidate = profiles
+            candidate[index].conversationDefaults = configuration.isDefault ? nil : configuration
+            let library = ConnectionLibrary(profiles: candidate, activeID: activeProfileID, selectedConversations: selectedConversations)
+            let data = try JSONEncoder().encode(library)
+            try data.write(to: directory.appendingPathComponent("connections.json"), options: .atomic)
+            defaults.set(data, forKey: "connectionLibrary")
+            profiles = candidate
+        }
     }
 
     func rename(_ id: UUID, to rawTitle: String) {
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !storageLoadFailed, !title.isEmpty, let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID }) else { return }
-        allConversations[index].title = String(title.prefix(80))
-        persist()
+        var candidate = allConversations
+        candidate[index].title = String(title.prefix(80))
+        do { try commitConversations(candidate) } catch { errorMessage = error.localizedDescription }
     }
 
     func togglePin(_ id: UUID) {
         guard !storageLoadFailed, !isSending,
               let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID }) else { return }
-        allConversations[index].pinned = !allConversations[index].isPinned
-        persist()
+        var candidate = allConversations
+        candidate[index].pinned = !candidate[index].isPinned
+        do { try commitConversations(candidate) } catch { errorMessage = error.localizedDescription }
     }
 
     func libraryItem(_ target: LocalMessageTarget) -> MessageLibraryItem? {
@@ -384,8 +469,7 @@ final class AppModel: ObservableObject {
         }
         var archive = BackupArchive(installationID: installationID, createdAt: Date(), profiles: profiles,
                                     conversations: allConversations, drafts: try draftStore.snapshot(), images: images)
-        if archive.bookmarkCount > 0 { archive.version = 2 }
-        if archive.templateCount > 0 { archive.version = 3 }
+        archive.version = archive.minimumVersion
         try archive.validate()
         return archive
     }
@@ -489,8 +573,11 @@ final class AppModel: ObservableObject {
         // until no conversation references them; deletion already checks all profiles.
         let copies = messages.map { ChatMessage(role: $0.role, content: $0.content,
                                                 createdAt: $0.createdAt, imageID: $0.imageID) }
+        var workspace = source.workspaceState
+        workspace.archived = false
         let branch = Conversation(title: String(source.title.prefix(75)) + " · 分支",
-                                  messages: copies, updatedAt: Date(), profileID: activeProfileID)
+                                  messages: copies, updatedAt: Date(), profileID: activeProfileID,
+                                  workspace: workspace.isDefault ? nil : workspace)
         let candidate = [branch] + allConversations
         do {
             try JSONEncoder().encode(candidate).write(to: conversationsURL, options: .atomic)
@@ -513,6 +600,10 @@ final class AppModel: ObservableObject {
         }
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || imageData != nil, !isSending else { return false }
+        guard selectedConversation?.isArchived != true else {
+            errorMessage = WorkspaceError.archived.localizedDescription
+            return false
+        }
         guard settings.isConfigured else {
             errorMessage = "请先在连接管理中填写 Hermes 服务地址和 API 密钥。"
             return false
@@ -528,32 +619,44 @@ final class AppModel: ObservableObject {
         }
 
         let sentDraftKey = draftKey
-        if selectedID == nil {
+        var candidate = allConversations
+        var targetID = selectedID
+        if targetID == nil {
             let title = text.isEmpty ? "图片对话" : String(text.prefix(38))
-            let conversation = Conversation(title: title, messages: [], updatedAt: Date(), profileID: activeProfileID)
-            allConversations.insert(conversation, at: 0)
-            selectedID = conversation.id
+            let workspace = ConversationWorkspace(configuration: conversationConfiguration)
+            let conversation = Conversation(title: title, messages: [], updatedAt: Date(), profileID: activeProfileID,
+                                            workspace: workspace.isDefault ? nil : workspace)
+            candidate.insert(conversation, at: 0)
+            targetID = conversation.id
         }
-        guard let selectedID, let index = allConversations.firstIndex(where: { $0.id == selectedID }) else {
+        guard let targetID, let index = candidate.firstIndex(where: { $0.id == targetID }) else {
             if let imageID { ImageAttachmentStore.remove(imageID, directory: attachmentDirectory) }
             return false
         }
-        allConversations[index].messages.append(
+        candidate[index].messages.append(
             ChatMessage(role: .user, content: text, imageID: imageID)
         )
-        allConversations[index].updatedAt = Date()
-        persist()
+        candidate[index].updatedAt = Date()
+        do { try commitConversations(candidate) }
+        catch {
+            if let imageID { ImageAttachmentStore.remove(imageID, directory: attachmentDirectory) }
+            errorMessage = "消息保存失败，尚未发送：\(error.localizedDescription)"
+            return false
+        }
+        selectedID = targetID
         do { try draftStore.set("", for: sentDraftKey) }
         catch { errorMessage = "草稿清理失败：\(error.localizedDescription)" }
         rememberSelection()
         draft = ""
-        requestResponse(for: selectedID)
+        requestResponse(for: targetID)
         return true
     }
 
     private func requestResponse(for id: UUID) {
         guard let conversation = conversations.first(where: { $0.id == id }) else { return }
+        guard !conversation.isArchived else { errorMessage = WorkspaceError.archived.localizedDescription; return }
         let history = conversation.messages
+        let configuration = conversation.workspaceState.configuration
         let connection = settings
         isSending = true
         streamedReply = ""
@@ -568,7 +671,7 @@ final class AppModel: ObservableObject {
             }
             do {
                 let reply = try await HermesClient(settings: connection, sessionConfiguration: sessionConfiguration, attachmentDirectory: attachmentDirectory).stream(
-                    messages: history
+                    messages: history, configuration: configuration
                 ) { event in
                     await MainActor.run {
                         switch event {

@@ -1,140 +1,236 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct HistoryView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
-    @State private var renamingID: UUID?
-    @State private var newTitle = ""
+    var embedded = false
+    var onOpen: (() -> Void)? = nil
+    @State private var query = ""
+    @State private var scope: ConversationScope = .active
+    @State private var sort: ConversationSort = .recent
+    @State private var tag: String?
+    @State private var selecting = false
+    @State private var selected = Set<UUID>()
+    @State private var deleting = Set<UUID>()
+    @State private var settingsTarget: ConversationSettingsTarget?
+    @State private var document: ConversationDocument?
+    @State private var exporting = false
+    @State private var showingConnections = false
+    @State private var exportName = "Hermes-对话"
 
-    private var filteredConversations: [Conversation] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return model.conversations }
-        return model.conversations.filter {
-            $0.title.localizedCaseInsensitiveContains(query) ||
-            $0.messages.contains { $0.content.localizedCaseInsensitiveContains(query) }
-        }
+    private var visible: [Conversation] {
+        ConversationWorkbench.filtered(model.conversations, scope: scope, query: query, tag: tag, sort: sort)
     }
+    private var tags: [String] { Array(Set(model.conversations.flatMap { $0.workspaceState.tags })).sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+    private var visibleIDs: Set<UUID> { Set(visible.map(\.id)) }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if model.conversations.isEmpty {
-                    ContentUnavailableView(
-                        "还没有对话",
-                        systemImage: "bubble.left.and.bubble.right",
-                        description: Text("当前连接：\(model.activeProfileName)。发送第一条消息后，对话会保存在这台设备上。")
-                    )
-                } else if filteredConversations.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
-                } else {
-                    List {
-                        ForEach(filteredConversations) { conversation in
-                            Button {
-                                model.select(conversation.id)
-                                dismiss()
-                            } label: {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        if conversation.isPinned {
-                                            Image(systemName: "pin.fill").foregroundStyle(HermesTheme.accent)
-                                                .accessibilityLabel("已置顶")
-                                        }
-                                        Text(conversation.title)
-                                            .font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                                    }
-                                    if let last = conversation.messages.last {
-                                        Text(last.content.isEmpty && last.imageID != nil ? "[图片]" : last.content)
-                                            .font(.caption).foregroundStyle(HermesTheme.muted).lineLimit(2)
-                                    }
-                                    Text(conversation.updatedAt, style: .date)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(HermesTheme.muted)
-                                }
-                                .padding(.vertical, 6)
-                            }
-                            .foregroundStyle(.white)
-                            .listRowBackground(
-                                conversation.id == model.selectedID
-                                ? HermesTheme.raised : HermesTheme.surface
-                            )
-                            .swipeActions {
-                                Button("删除", role: .destructive) {
-                                    model.delete(conversation.id)
-                                }
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: "pin") {
-                                    model.togglePin(conversation.id)
-                                }
-                                .tint(HermesTheme.accent)
-                            }
-                            .contextMenu {
-                                Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: conversation.isPinned ? "pin.slash" : "pin") {
-                                    model.togglePin(conversation.id)
-                                }
-                                Button("重命名", systemImage: "pencil") {
-                                    newTitle = conversation.title
-                                    renamingID = conversation.id
-                                }
-                                ShareLink(
-                                    item: transcript(for: conversation),
-                                    subject: Text(conversation.title),
-                                    message: Text("Hermes 对话记录")
-                                ) {
-                                    Label("分享文本", systemImage: "square.and.arrow.up")
-                                }
-                                Button("删除", systemImage: "trash", role: .destructive) {
-                                    model.delete(conversation.id)
-                                }
-                            }
-                        }
-                    }
-                    .scrollContentBackground(.hidden)
-                }
-            }
-            .background(HermesTheme.background)
-            .navigationTitle(model.activeProfileName + " · 对话记录")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索标题或消息")
-            .alert("重命名对话", isPresented: Binding(
-                get: { renamingID != nil },
-                set: { if !$0 { renamingID = nil } }
-            )) {
-                TextField("标题", text: $newTitle)
-                Button("取消", role: .cancel) { renamingID = nil }
-                Button("保存") {
-                    if let renamingID { model.rename(renamingID, to: newTitle) }
-                    renamingID = nil
-                }
-            } message: {
-                Text("为这段对话设置一个方便查找的标题。")
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("关闭") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        model.newConversation()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .disabled(model.isSending)
-                }
-            }
-            .tint(HermesTheme.accent)
+        Group {
+            if embedded { content }
+            else { NavigationStack { content } }
         }
-        .preferredColorScheme(.dark)
+        .tint(HermesTheme.accent).preferredColorScheme(.dark)
+        .sheet(isPresented: $showingConnections) { SettingsView() }
+        .sheet(item: $settingsTarget) { target in
+            ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
+        }
+        .confirmationDialog("删除 \(deleting.count) 段本机对话？", isPresented: Binding(
+            get: { !deleting.isEmpty }, set: { if !$0 { deleting = [] } }
+        ), titleVisibility: .visible) {
+            Button("删除对话与对应草稿", role: .destructive) {
+                let ids = deleting
+                perform { try model.deleteConversations(ids) }
+                selected.subtract(ids)
+                deleting = []
+            }
+            Button("取消", role: .cancel) { deleting = [] }
+        } message: { Text("收藏会随原消息删除，其他对话仍引用的图片会保留。归档可以保留内容并从进行中移出。") }
+        .fileExporter(isPresented: $exporting, document: document, contentType: ConversationDocument.markdownType, defaultFilename: exportName) { result in
+            if case .failure(let error) = result { model.errorMessage = error.localizedDescription }
+        }
+        .onChange(of: visibleIDs) { _, ids in selected.formIntersection(ids) }
+        .onChange(of: model.activeProfileID) { _, _ in query = ""; tag = nil; scope = .active; selected = []; selecting = false }
+        .onChange(of: tags) { _, values in if let tag, !values.contains(tag) { self.tag = nil } }
     }
 
-    private func transcript(for conversation: Conversation) -> String {
-        let messages = conversation.messages.map { message in
-            let role = message.role == .user ? "我" : "Hermes"
-            let attachment = message.imageID == nil ? "" : "\n[图片]"
-            return "## \(role)\n\n\(message.content)\(attachment)"
+    private var content: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(spacing: 9) {
+                        Image(systemName: "circle.hexagongrid.fill").foregroundStyle(HermesTheme.accent)
+                        Text("HERMES / WORKSPACE").font(.caption.weight(.semibold)).tracking(2)
+                    }.foregroundStyle(HermesTheme.muted)
+                    Text("把想法，继续下去。").font(.title2.bold())
+                    if !model.settings.isConfigured || model.needsRecovery {
+                        Button { showingConnections = true } label: {
+                            HStack {
+                                Image(systemName: model.needsRecovery ? "externaldrive.badge.exclamationmark" : "server.rack")
+                                Text(model.needsRecovery ? "本机数据需要恢复 · 打开备份与恢复" : "先配置服务器，连接你自己的 Hermes")
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                            }.font(.caption).foregroundStyle(HermesTheme.accent)
+                        }.buttonStyle(.plain)
+                    }
+                    HStack(spacing: 10) {
+                        metric("进行中", count: model.conversations.filter { !$0.isArchived }.count, icon: "bubble.left.and.bubble.right", target: .active)
+                        metric("已置顶", count: model.conversations.filter { !$0.isArchived && $0.isPinned }.count, icon: "pin", target: .pinned)
+                        metric("已归档", count: model.conversations.filter(\.isArchived).count, icon: "archivebox", target: .archived)
+                    }
+                    Button(action: newConversation) {
+                        HStack { Label("开始新对话", systemImage: "square.and.pencil"); Spacer(); Image(systemName: "arrow.up.right") }
+                            .font(.subheadline.weight(.semibold)).padding(14)
+                            .foregroundStyle(HermesTheme.background).background(HermesTheme.accent, in: RoundedRectangle(cornerRadius: 12))
+                    }.buttonStyle(.plain).disabled(model.isSending || model.needsRecovery).accessibilityIdentifier("workbench-new-chat")
+                }.padding(.vertical, 8)
+            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+            Section {
+                Picker("对话范围", selection: $scope) { ForEach(ConversationScope.allCases) { Text($0.title).tag($0) } }
+                    .pickerStyle(.segmented).listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
+                if !tags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            tagButton(nil)
+                            ForEach(tags, id: \.self) { tagButton($0) }
+                        }
+                    }.listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 12, trailing: 0)).listRowBackground(Color.clear)
+                }
+            }.listRowSeparator(.hidden)
+            Section {
+                if visible.isEmpty {
+                    ContentUnavailableView(query.isEmpty && tag == nil ? (scope == .archived ? "归档区还是空的" : "留一个位置给新想法") : "没有匹配的对话",
+                        systemImage: scope == .archived ? "archivebox" : "bubble.left.and.bubble.right",
+                        description: Text(query.isEmpty && tag == nil ? "发送消息后会自动保存。长按对话可整理标签、置顶或归档。" : "试试其他关键词、标签或范围。"))
+                        .listRowBackground(Color.clear)
+                }
+                ForEach(visible) { conversation in
+                    Button {
+                        if selecting {
+                            if !selected.insert(conversation.id).inserted { selected.remove(conversation.id) }
+                        } else {
+                            model.select(conversation.id)
+                            openChat()
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            if selecting {
+                                Image(systemName: selected.contains(conversation.id) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selected.contains(conversation.id) ? HermesTheme.accent : HermesTheme.muted)
+                            }
+                            WorkspaceConversationRow(conversation: conversation)
+                        }
+                    }
+                    .buttonStyle(.plain).disabled(model.isSending)
+                    .accessibilityIdentifier("workbench-row-\(conversation.id)")
+                    .listRowBackground(HermesTheme.surface)
+                    .contextMenu {
+                        Button("对话设置与标签", systemImage: "tag") { edit(conversation) }
+                        Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { model.togglePin(conversation.id) }
+                        Button(conversation.isArchived ? "恢复到进行中" : "归档", systemImage: conversation.isArchived ? "arrow.uturn.backward" : "archivebox") {
+                            perform { try model.setArchived([conversation.id], archived: !conversation.isArchived) }
+                        }
+                        Button("导出 Markdown", systemImage: "square.and.arrow.up") { export([conversation]) }
+                        Button("删除", systemImage: "trash", role: .destructive) { deleting = [conversation.id] }
+                    }
+                    .swipeActions {
+                        Button(conversation.isArchived ? "恢复" : "归档", systemImage: "archivebox") {
+                            perform { try model.setArchived([conversation.id], archived: !conversation.isArchived) }
+                        }.tint(HermesTheme.muted)
+                    }
+                }
+            } header: {
+                HStack { Text("\(visible.count) 段对话"); Spacer(); Text(selecting ? "已选 \(selected.count) 段" : sort.title) }
+            }
         }
-        return "# \(conversation.title)\n\n" + messages.joined(separator: "\n\n")
+        .listStyle(.insetGrouped).scrollContentBackground(.hidden).background(HermesTheme.background)
+        .searchable(text: $query, prompt: "搜索标题、消息或标签")
+        .navigationTitle(model.activeProfileName).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !embedded { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Picker("排序", selection: $sort) { ForEach(ConversationSort.allCases) { Text($0.title).tag($0) } }
+                    Button(selecting ? "完成整理" : "批量整理", systemImage: "checklist") { selecting.toggle(); selected = [] }
+                    if selecting { Button("选择当前结果", systemImage: "checkmark.circle") { selected = visibleIDs } }
+                    Button("新对话默认设置", systemImage: "slider.horizontal.3") { model.newConversation(); showSettings() }
+                } label: { Image(systemName: "slider.horizontal.3") }
+                .disabled(model.isSending).accessibilityLabel("工作台选项")
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selecting {
+                HStack(spacing: 20) {
+                    Button(scope == .archived ? "恢复" : "归档", systemImage: "archivebox") {
+                        perform { try model.setArchived(selected, archived: scope != .archived) }
+                        selected = []
+                    }
+                    Button("导出", systemImage: "square.and.arrow.up") { export(visible.filter { selected.contains($0.id) }) }
+                    Spacer()
+                    Button("删除", systemImage: "trash", role: .destructive) { deleting = selected }
+                }.font(.subheadline).padding(16).background(HermesTheme.surface)
+                    .disabled(selected.isEmpty || model.isSending || model.needsRecovery)
+            }
+        }
+        .alert("操作失败", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
+            Button("知道了", role: .cancel) { model.errorMessage = nil }
+        } message: { Text(model.errorMessage ?? "") }
+    }
+
+    private func metric(_ title: String, count: Int, icon: String, target: ConversationScope) -> some View {
+        Button { scope = target } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: icon).foregroundStyle(HermesTheme.accent)
+                Text("\(count)").font(.title2.weight(.semibold))
+                Text(title).font(.caption).foregroundStyle(HermesTheme.muted)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                .background(scope == target ? HermesTheme.raised : HermesTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        }.buttonStyle(.plain).accessibilityLabel("\(title)，\(count) 段对话")
+    }
+
+    private func tagButton(_ value: String?) -> some View {
+        Button { tag = value } label: {
+            Text(value.map { "# " + $0 } ?? "全部标签").font(.caption.weight(.medium)).padding(.horizontal, 12).padding(.vertical, 8)
+                .background(tag == value ? HermesTheme.accent.opacity(0.18) : HermesTheme.surface, in: Capsule())
+                .foregroundStyle(tag == value ? HermesTheme.accent : HermesTheme.muted)
+        }.buttonStyle(.plain)
+    }
+    private func newConversation() { model.newConversation(); openChat() }
+    private func openChat() { if let onOpen { onOpen() } else { dismiss() } }
+    private func edit(_ conversation: Conversation) { model.select(conversation.id); showSettings() }
+    private func showSettings() { settingsTarget = ConversationSettingsTarget(conversationID: model.selectedID, profileID: model.activeProfileID, draftKey: model.draftKey) }
+    private func perform(_ action: () throws -> Void) { do { try action() } catch { model.errorMessage = error.localizedDescription } }
+    private func export(_ conversations: [Conversation]) {
+        guard !conversations.isEmpty else { return }
+        document = ConversationDocument(text: ConversationWorkbench.markdown(conversations))
+        exportName = conversations.count == 1 ? ConversationWorkbench.filename(conversations[0].title) : "Hermes-\(conversations.count)段对话"
+        exporting = true
+    }
+}
+
+private struct WorkspaceConversationRow: View {
+    let conversation: Conversation
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                if conversation.isPinned { Image(systemName: "pin.fill").font(.caption).foregroundStyle(HermesTheme.accent) }
+                Text(conversation.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(HermesTheme.muted)
+            }
+            if let last = conversation.messages.last {
+                Text(last.content.isEmpty ? "[图片]" : last.content).font(.subheadline).foregroundStyle(HermesTheme.muted).lineLimit(2)
+            }
+            if !conversation.workspaceState.tags.isEmpty {
+                Text(conversation.workspaceState.tags.map { "#" + $0 }.joined(separator: "  "))
+                    .font(.caption).foregroundStyle(HermesTheme.accent).lineLimit(1)
+            }
+            HStack {
+                Text("\(conversation.messages.count) 条消息")
+                if !conversation.workspaceState.configuration.isDefault { Image(systemName: "slider.horizontal.3"); Text(conversation.workspaceState.configuration.contextLabel) }
+                Spacer()
+                Text(conversation.updatedAt, style: .date)
+            }.font(.caption2).foregroundStyle(HermesTheme.muted)
+        }.foregroundStyle(.white).padding(.vertical, 8)
     }
 }

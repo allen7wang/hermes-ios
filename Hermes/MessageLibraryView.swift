@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct MessageLibraryView: View {
+    var embedded = false
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let onOpen: (LocalMessageTarget) -> Void
@@ -74,7 +75,7 @@ struct MessageLibraryView: View {
                 MessageLibraryDetailView(target: target, onOpen: onOpen)
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } }
+                if !embedded { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Picker("消息角色", selection: $role) {

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    var embedded = false
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var showingEditor = false
@@ -79,6 +80,12 @@ struct SettingsView: View {
                         .font(.footnote).textSelection(.enabled)
                 }
                 .listRowBackground(HermesTheme.surface)
+
+                Section("关于 Hermes") {
+                    LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0")
+                    Text("本机记录、标签、草稿与对话设置保存在设备上。服务端会话和定时任务由你连接的服务器管理。")
+                        .font(.footnote).foregroundStyle(HermesTheme.muted)
+                }.listRowBackground(HermesTheme.surface)
             }
             .scrollContentBackground(.hidden)
             .background(HermesTheme.background)
@@ -87,7 +94,7 @@ struct SettingsView: View {
             }
             .navigationTitle("连接管理")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
+            .toolbar { if !embedded { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } } }
             .tint(HermesTheme.accent)
             .confirmationDialog("删除“\(deletingProfile?.name ?? "")”？", isPresented: Binding(
                 get: { deletingProfile != nil }, set: { if !$0 { deletingProfile = nil } }

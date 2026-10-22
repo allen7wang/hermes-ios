@@ -9,6 +9,7 @@ struct ConnectionProfile: Identifiable, Codable, Equatable {
     var serverURL: String
     var model: String
     var promptTemplates: [PromptTemplate]?
+    var conversationDefaults: ConversationConfiguration?
 
     var templates: [PromptTemplate] {
         get { promptTemplates ?? [] }

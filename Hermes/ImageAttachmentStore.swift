@@ -26,7 +26,12 @@ enum ImageAttachmentStore {
 
     static func save(_ jpeg: Data, id: UUID = UUID(), directory: URL? = nil) throws -> UUID {
         try FileManager.default.createDirectory(at: directory ?? defaultDirectory, withIntermediateDirectories: true)
+        #if targetEnvironment(macCatalyst)
+        // iOS data-protection writes produce unreadable files on the Mac validation host.
+        try jpeg.write(to: fileURL(for: id, directory: directory), options: .atomic)
+        #else
         try jpeg.write(to: fileURL(for: id, directory: directory), options: [.atomic, .completeFileProtectionUnlessOpen])
+        #endif
         return id
     }
 

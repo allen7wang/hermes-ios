@@ -1,17 +1,20 @@
 import SwiftUI
 
 struct RemoteWorkspaceView: View {
+    var embedded = false
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        RemoteWorkspaceContent(client: HermesClient(settings: model.settings))
+        RemoteWorkspaceContent(client: HermesClient(settings: model.settings), embedded: embedded)
             .id(model.settings)
     }
 }
 
-private struct RemoteWorkspaceContent: View {
+struct RemoteWorkspaceContent: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    let embedded: Bool
     @StateObject private var workspace: RemoteWorkspaceModel
     @ScaledMetric(relativeTo: .caption) private var jobFilterHeight: CGFloat = 36
     @State private var section = 0
@@ -24,9 +27,19 @@ private struct RemoteWorkspaceContent: View {
     @State private var newSessionTitle = ""
     @State private var createdSession: RemoteSession?
     @State private var showingCreatedSession = false
+    @AppStorage("workspaceRefreshInterval") private var refreshSeconds = 0
+    @State private var visible = false
+    @State private var showingDetail = false
 
-    init(client: HermesClient) {
+    private var refreshInterval: RemoteRefreshInterval { RemoteRefreshInterval(rawValue: refreshSeconds) ?? .off }
+    private var pollingKey: String {
+        "\(refreshSeconds)-\(section)-\(visible)-\(scenePhase == .active)-\(showingDetail)-\(showingNewJob)-\(creatingSession)"
+    }
+
+    init(client: HermesClient, embedded: Bool, initialSection: Int = 0) {
+        self.embedded = embedded
         _workspace = StateObject(wrappedValue: RemoteWorkspaceModel(client: client))
+        _section = State(initialValue: initialSection)
     }
 
     private var isConfigured: Bool { workspace.client.settings.isConfigured }
@@ -55,6 +68,7 @@ private struct RemoteWorkspaceContent: View {
                     .padding(16)
                     if isConfigured {
                         searchAndFilters
+                        if section == 1 { taskOverview }
                         if let notice = workspace.notice {
                             HStack(alignment: .top) {
                                 Text(notice).font(.caption)
@@ -74,7 +88,18 @@ private struct RemoteWorkspaceContent: View {
             .navigationTitle(model.activeProfileName + " · 服务端")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } }
+                if !embedded { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
+                if section == 1 && isConfigured {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Picker("任务自动刷新", selection: $refreshSeconds) {
+                                ForEach(RemoteRefreshInterval.allCases) { Text($0.title).tag($0.rawValue) }
+                            }
+                            Text("仅在任务列表可见且 App 在前台时读取；失败后自动放慢。")
+                        } label: { Image(systemName: refreshInterval == .off ? "clock" : "clock.badge.checkmark") }
+                            .accessibilityLabel("任务自动刷新")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await reload() } } label: { Image(systemName: "arrow.clockwise") }
                         .disabled(refreshDisabled).accessibilityLabel("刷新服务端内容")
@@ -98,6 +123,22 @@ private struct RemoteWorkspaceContent: View {
                 if let session = createdSession { sessionDetail(session) }
             }
             .task(id: section) { await reload() }
+            .onAppear { visible = true }
+            .onDisappear { visible = false }
+            .task(id: pollingKey) {
+                guard section == 1, visible, scenePhase == .active, !showingDetail,
+                      !showingNewJob, !creatingSession, isConfigured, refreshInterval != .off else { return }
+                var failures = 0
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(refreshInterval.delay(afterFailures: failures))) }
+                    catch { return }
+                    guard !Task.isCancelled else { return }
+                    if !workspace.jobActionsDisabled {
+                        await workspace.reloadJobs()
+                        failures = workspace.jobsError == nil ? 0 : min(3, failures + 1)
+                    }
+                }
+            }
             .alert("服务端操作失败", isPresented: Binding(
                 get: { workspace.actionError != nil }, set: { if !$0 { workspace.actionError = nil } }
             )) {
@@ -117,6 +158,26 @@ private struct RemoteWorkspaceContent: View {
             } message: { Text("消息会保存在 Hermes 服务器上，可从其他客户端继续。") }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var taskOverview: some View {
+        let overview = RemoteJobOverview(workspace.jobs)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                overviewButton("运行中", count: overview.running, filter: .running, color: .green)
+                overviewButton("需关注", count: overview.attention, filter: .attention, color: .orange)
+                overviewButton("已暂停", count: overview.paused, filter: .paused, color: HermesTheme.muted)
+            }
+            Text(refreshInterval == .off ? "手动刷新 · 下拉列表可读取最新结果" : "前台\(refreshInterval.title)刷新 · 离开列表即暂停")
+                .font(.caption2).foregroundStyle(HermesTheme.muted)
+        }.padding(.horizontal, 16).padding(.bottom, 12)
+    }
+
+    private func overviewButton(_ title: String, count: Int, filter: RemoteJobFilter, color: Color) -> some View {
+        Button { jobFilter = filter } label: {
+            HStack { Circle().fill(color).frame(width: 5, height: 5); Text(title); Spacer(minLength: 2); Text("\(count)").bold() }
+                .font(.caption).padding(10).background(HermesTheme.surface, in: RoundedRectangle(cornerRadius: 9))
+        }.buttonStyle(.plain)
     }
 
     private var searchAndFilters: some View {
@@ -224,6 +285,7 @@ private struct RemoteWorkspaceContent: View {
                 ForEach(visible) { job in
                     NavigationLink {
                         RemoteJobDetailView(workspace: workspace, jobID: job.id)
+                            .onAppear { showingDetail = true }.onDisappear { showingDetail = false }
                     } label: {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(alignment: .top) {

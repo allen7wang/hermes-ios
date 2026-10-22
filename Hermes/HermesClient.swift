@@ -238,8 +238,12 @@ struct HermesClient {
 
     func stream(
         messages: [ChatMessage],
+        configuration: ConversationConfiguration = ConversationConfiguration(),
         onEvent: (ChatStreamEvent) async -> Void
     ) async throws -> String {
+        let options = try configuration.validated()
+        var context = try options.history(from: messages).map { try CompletionMessage($0, directory: attachmentDirectory) }
+        if !options.systemPrompt.isEmpty { context.insert(CompletionMessage(systemPrompt: options.systemPrompt), at: 0) }
         let url = try endpoint("v1", "chat", "completions")
         var request = authorizedRequest(url: url)
         request.httpMethod = "POST"
@@ -248,8 +252,9 @@ struct HermesClient {
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONEncoder().encode(
             CompletionRequest(
-                model: settings.model.isEmpty ? "hermes-agent" : settings.model,
-                messages: try messages.map { try CompletionMessage($0, directory: attachmentDirectory) },
+                model: options.model.isEmpty ? (settings.model.isEmpty ? "hermes-agent" : settings.model) : options.model,
+                provider: options.provider.isEmpty ? nil : options.provider,
+                messages: context,
                 stream: true
             )
         )
@@ -371,6 +376,7 @@ private struct ApprovalResponse: Decodable { let resolved: Int }
 
 private struct CompletionRequest: Encodable {
     let model: String
+    let provider: String?
     let messages: [CompletionMessage]
     let stream: Bool
 }
@@ -378,6 +384,11 @@ private struct CompletionRequest: Encodable {
 private struct CompletionMessage: Encodable {
     let role: String
     let content: Content
+
+    init(systemPrompt: String) {
+        role = "system"
+        content = .text(systemPrompt)
+    }
 
     init(_ message: ChatMessage, directory: URL? = nil) throws {
         role = message.role.rawValue

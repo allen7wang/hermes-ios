@@ -28,7 +28,7 @@ struct BackupView: View {
             Section {
                 Label("将你的记录保存为备份", systemImage: "externaldrive.fill")
                     .foregroundStyle(HermesTheme.accent)
-                Text("包含所有连接的本机对话、图片、文字草稿、消息收藏备注和自建提示词模板，以及连接名称、地址和模型。")
+                Text("包含所有连接的本机对话、图片、草稿、收藏备注、提示词模板，以及标签、归档状态和对话设置。")
                     .font(.subheadline).foregroundStyle(HermesTheme.muted)
             }
             .listRowBackground(HermesTheme.surface)
@@ -64,7 +64,7 @@ struct BackupView: View {
                     LabeledContent("收藏消息", value: "\(archive.bookmarkCount) 条")
                     LabeledContent("提示词模板", value: "\(archive.templateCount) 个")
                     if archive.version >= 2 {
-                        Text(archive.version >= 3 ? "含提示词模板的备份需 Hermes iOS v0.10.0 或更新版本导入。" : "含消息收藏的备份需 Hermes iOS v0.9.0 或更新版本导入。")
+                        Text(archive.version >= 4 ? "含工作台设置的备份需 Hermes iOS v1.0.0 或更新版本导入。" : archive.version >= 3 ? "含提示词模板的备份需 Hermes iOS v0.10.0 或更新版本导入。" : "含消息收藏的备份需 Hermes iOS v0.9.0 或更新版本导入。")
                             .font(.footnote).foregroundStyle(HermesTheme.muted)
                     }
                     Text(preview.description).font(.subheadline)

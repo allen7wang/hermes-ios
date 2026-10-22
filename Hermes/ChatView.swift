@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 private struct PromptComposerContext: Identifiable {
     let id = UUID()
@@ -9,7 +10,9 @@ private struct PromptComposerContext: Identifiable {
 }
 
 struct ChatView: View {
+    var initialTarget: LocalMessageTarget? = nil
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
     @State private var showingHistory = false
     @State private var showingSettings = false
     @State private var showingRemote = false
@@ -25,11 +28,24 @@ struct ChatView: View {
     @State private var composerNotice: String?
     @State private var editingMessage: ChatMessage?
     @State private var promptContext: PromptComposerContext?
+    @State private var settingsTarget: ConversationSettingsTarget?
+    @State private var exportDocument: ConversationDocument?
+    @State private var exporting = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            configurationBar
+            if model.selectedConversation?.isArchived == true {
+                HStack {
+                    Label("已归档 · 恢复后可继续发送", systemImage: "archivebox")
+                    Spacer()
+                    Button("恢复") {
+                        if let id = model.selectedID { performLocalAction { try model.setArchived([id], archived: false) } }
+                    }.disabled(model.isSending)
+                }.font(.caption).padding(12).background(HermesTheme.surface)
+            }
 
             ChatTimeline(contextID: model.selectedID?.uuidString ?? "new", updateToken: timelineToken, jumpRequest: $jumpRequest) { _, _ in
                 if let conversation = model.selectedConversation {
@@ -85,11 +101,21 @@ struct ChatView: View {
             }
 
             composer
+                .disabled(model.selectedConversation?.isArchived == true)
         }
         .background(HermesTheme.background.ignoresSafeArea())
         .sheet(isPresented: $showingHistory) { HistoryView() }
         .sheet(isPresented: $showingRemote) { RemoteWorkspaceView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(item: $settingsTarget) { target in
+            ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
+        }
+        .fileExporter(isPresented: $exporting, document: exportDocument, contentType: ConversationDocument.markdownType,
+                      defaultFilename: ConversationWorkbench.filename(model.selectedConversation?.title ?? "Hermes-对话")) { result in
+            if case .failure(let error) = result { model.errorMessage = error.localizedDescription }
+        }
+        .onAppear { openInitialTarget() }
+        .onChange(of: initialTarget) { _, _ in openInitialTarget() }
         .sheet(item: $promptContext) { context in
             PromptLibraryView(profileID: context.profileID, contextTitle: context.title,
                               currentDraft: { model.draft }) { text, mode in
@@ -160,19 +186,19 @@ struct ChatView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Button { showingHistory = true } label: {
-                Image(systemName: "line.3.horizontal")
+            Button { dismiss() } label: {
+                Image(systemName: "arrow.left")
                     .font(.system(size: 19, weight: .medium))
                     .frame(width: 42, height: 42)
             }
-            .accessibilityLabel("对话记录")
+            .accessibilityLabel("返回对话工作台")
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 7) {
                     Image(systemName: "circle.hexagongrid.fill")
                         .foregroundStyle(HermesTheme.accent)
-                    Text("HERMES")
-                        .tracking(2.2)
+                    Text(model.selectedConversation?.title ?? "新对话")
+                        .lineLimit(1)
                 }
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 Button {
@@ -202,18 +228,22 @@ struct ChatView: View {
             }
             .disabled(model.isSending)
             .accessibilityLabel("新对话")
-            Button { showingRemote = true } label: {
-                Image(systemName: "server.rack")
-                    .font(.system(size: 18))
-                    .frame(width: 42, height: 42)
-            }
-            .accessibilityLabel("服务端会话与定时任务")
             Menu {
+                Button("对话工作台", systemImage: "rectangle.grid.1x2") { showingHistory = true }
+                Button("对话设置与标签", systemImage: "slider.horizontal.3") { openConfiguration() }
+                    .disabled(model.isSending)
+                if let conversation = model.selectedConversation {
+                    Button("导出 Markdown", systemImage: "square.and.arrow.up") {
+                        exportDocument = ConversationDocument(text: ConversationWorkbench.markdown([conversation]))
+                        exporting = true
+                    }
+                }
                 Button("提示词模板", systemImage: "text.badge.plus") { openPrompts() }
                 Button("本机消息库", systemImage: "books.vertical") { showingLibrary = true }
                 Button("查找消息", systemImage: "magnifyingglass") { showingSearch = true }
                     .disabled(model.selectedConversation?.messages.isEmpty != false)
                 Button("连接管理", systemImage: "slider.horizontal.3") { showingSettings = true }
+                Button("服务端", systemImage: "server.rack") { showingRemote = true }
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.system(size: 18))
@@ -224,6 +254,29 @@ struct ChatView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
+    }
+
+    private var configurationBar: some View {
+        Button(action: openConfiguration) {
+            HStack(spacing: 8) {
+                Image(systemName: "slider.horizontal.3")
+                Text(model.conversationConfiguration.model.isEmpty ? model.settings.model : model.conversationConfiguration.model).lineLimit(1)
+                if !model.conversationConfiguration.systemPrompt.isEmpty { Image(systemName: "text.alignleft").accessibilityLabel("已设置系统提示词") }
+                Spacer(minLength: 4)
+                Text(model.conversationConfiguration.contextLabel).lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption2)
+            }.font(.caption).foregroundStyle(HermesTheme.muted).padding(.horizontal, 20).padding(.vertical, 10)
+        }.buttonStyle(.plain).disabled(model.isSending || model.needsRecovery).accessibilityLabel("对话设置，\(model.conversationConfiguration.contextLabel)")
+    }
+
+    private func openConfiguration() {
+        settingsTarget = ConversationSettingsTarget(conversationID: model.selectedID, profileID: model.activeProfileID, draftKey: model.draftKey)
+    }
+
+    private func openInitialTarget() {
+        if let target = initialTarget, model.selectedID == target.conversationID {
+            jumpRequest = TimelineJumpRequest(contextID: target.conversationID.uuidString, messageID: target.messageID.uuidString)
+        }
     }
 
     private var highlightedID: String? {

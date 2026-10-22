@@ -5,6 +5,7 @@ struct RemoteJobDetailView: View {
     let jobID: String
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
+    @State private var copying = false
     @State private var confirmingRun = false
     @State private var confirmingDelete = false
 
@@ -47,6 +48,7 @@ struct RemoteJobDetailView: View {
                     }
                     Section {
                         Button("编辑任务", systemImage: "pencil") { editing = true }
+                        Button("复制为新任务", systemImage: "doc.on.doc") { copying = true }
                         if job.state != "completed" && job.state != "error" {
                             Button(job.isPaused ? "恢复任务" : "暂停任务", systemImage: job.isPaused ? "play" : "pause") {
                                 Task { await workspace.toggleJob(job) }
@@ -63,6 +65,9 @@ struct RemoteJobDetailView: View {
                 .refreshable { await workspace.refreshJob(jobID) }
                 .sheet(isPresented: $editing) {
                     RemoteJobEditorView(job: job) { Task { await workspace.refreshJob(jobID) } }
+                }
+                .sheet(isPresented: $copying) {
+                    RemoteJobEditorView(job: job, copying: true) { Task { await workspace.reloadJobs() } }
                 }
                 .confirmationDialog("立即运行“\(job.name)”？", isPresented: $confirmingRun) {
                     Button("立即运行") { Task { await workspace.runJob(job) } }

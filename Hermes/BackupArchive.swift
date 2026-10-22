@@ -15,6 +15,11 @@ struct BackupArchive: Codable {
 
     var bookmarkCount: Int { conversations.reduce(0) { $0 + $1.messages.filter { $0.bookmark != nil }.count } }
     var templateCount: Int { profiles.reduce(0) { $0 + $1.templates.count } }
+    var minimumVersion: Int {
+        if profiles.contains(where: { $0.conversationDefaults != nil }) || conversations.contains(where: { $0.workspace != nil }) { return 4 }
+        if templateCount > 0 { return 3 }
+        return bookmarkCount > 0 ? 2 : 1
+    }
 
     static func read(from url: URL) throws -> BackupArchive {
         let file = try FileHandle(forReadingFrom: url)
@@ -42,7 +47,8 @@ struct BackupArchive: Codable {
 
     func validate() throws {
         guard format == "hermes-ios-backup" else { throw BackupError.invalidFile }
-        guard (1...3).contains(version) else { throw BackupError.unsupportedVersion }
+        guard (1...4).contains(version) else { throw BackupError.unsupportedVersion }
+        guard version >= minimumVersion else { throw BackupError.invalidFile }
         guard !profiles.isEmpty, profiles.count <= 100,
               conversations.count <= 5_000,
               conversations.reduce(0, { $0 + $1.messages.count }) <= 100_000,
@@ -56,9 +62,13 @@ struct BackupArchive: Codable {
             guard version >= 3 || profile.templates.isEmpty else { throw BackupError.invalidFile }
             do { try PromptTemplate.validateCollection(profile.templates) }
             catch { throw BackupError.invalidFile }
+            if let configuration = profile.conversationDefaults {
+                guard try configuration.validated() == configuration else { throw BackupError.invalidFile }
+            }
             if !profile.serverURL.isEmpty { _ = try HermesClient(settings: profile.settings(apiKey: "")).rootURL }
         }
         for conversation in conversations {
+            try conversation.workspaceState.validate()
             guard let profileID = conversation.profileID, profileIDs.contains(profileID),
                   Set(conversation.messages.map(\.id)).count == conversation.messages.count else { throw BackupError.invalidFile }
             conversationProfiles[conversation.id] = profileID
@@ -234,7 +244,11 @@ enum BackupRestoreTransaction {
 
     static func commit(_ state: BackupRestoreState, directory: URL, defaults: UserDefaults) throws {
         let journal = directory.appendingPathComponent("pending-restore.json")
+        #if targetEnvironment(macCatalyst)
+        try JSONEncoder().encode(state).write(to: journal, options: .atomic)
+        #else
         try JSONEncoder().encode(state).write(to: journal, options: [.atomic, .completeFileProtectionUnlessOpen])
+        #endif
         try apply(state, directory: directory, defaults: defaults)
     }
 

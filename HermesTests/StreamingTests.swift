@@ -83,10 +83,15 @@ final class StreamingTests: XCTestCase {
             "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
             "data: [DONE]\n\n"
         ]
-        let imageID = try ImageAttachmentStore.save(Data([0xFF, 0xD8, 0xFF, 0xD9]))
-        defer { ImageAttachmentStore.remove(imageID) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("HermesStreamingImage.\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let imageID = try ImageAttachmentStore.save(Data([0xFF, 0xD8, 0xFF, 0xD9]), directory: directory)
         let message = ChatMessage(role: .user, content: "描述图片", imageID: imageID)
-        _ = try await makeClient().stream(messages: [message]) { _ in }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let client = HermesClient(settings: ConnectionSettings(serverURL: "https://hermes.test/v1", model: "hermes-agent", apiKey: "test-key"),
+                                  sessionConfiguration: configuration, attachmentDirectory: directory)
+        _ = try await client.stream(messages: [message]) { _ in }
 
         let body = try XCTUnwrap(MockURLProtocol.body)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
