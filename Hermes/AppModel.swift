@@ -266,7 +266,8 @@ final class AppModel: ObservableObject {
     }
 
     @discardableResult
-    func saveProjectDocument(id: UUID?, projectID: UUID, title: String, body: String, profileID: UUID) throws -> UUID {
+    func saveProjectDocument(id: UUID?, projectID: UUID, title: String, body: String, profileID: UUID,
+                             expectedDocument: ProjectDocument? = nil) throws -> UUID {
         try requireProjectAccess(profileID: profileID)
         guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }),
               let projectIndex = profiles[profileIndex].projects.firstIndex(where: { $0.id == projectID }) else { throw ProjectError.missing }
@@ -276,6 +277,7 @@ final class AppModel: ObservableObject {
         var documents = project.documents
         let existing = id.flatMap { id in documents.first { $0.id == id } }
         if id != nil && existing == nil { throw ProjectDocumentError.missing }
+        if let expectedDocument, existing != expectedDocument { throw ProjectDocumentError.changedDocument }
         let now = Date()
         let document = try ProjectDocument(id: existing?.id ?? UUID(), title: title, body: body,
             createdAt: existing?.createdAt ?? now, updatedAt: now).validated()
@@ -315,15 +317,29 @@ final class AppModel: ObservableObject {
         try commitProjectTransaction(profiles: candidateProfiles, conversations: candidateConversations)
     }
 
-    func selectProjectDocuments(_ ids: [UUID], conversationID: UUID, profileID: UUID) throws {
+    func selectProjectDocuments(_ ids: [UUID], conversationID: UUID, profileID: UUID,
+                                expectedSelection: [UUID]? = nil, expectedProjectID: UUID? = nil) throws {
         try requireProjectAccess(profileID: profileID)
         try requireWorkspaceAccess([conversationID])
         guard let index = allConversations.firstIndex(where: { $0.id == conversationID && $0.profileID == profileID }),
               let project = project(for: allConversations[index]) else { throw ProjectError.missing }
+        if let expectedSelection, expectedSelection != (allConversations[index].referenceDocumentIDs ?? []) {
+            throw ProjectDocumentError.changedSelection
+        }
+        if let expectedProjectID, expectedProjectID != project.id { throw ProjectDocumentError.changedSelection }
         _ = try ProjectDocument.selected(ids: ids, from: project)
         var candidate = allConversations
         candidate[index].referenceDocumentIDs = ids.isEmpty ? nil : ids
         try commitConversations(candidate)
+    }
+
+    func captureProjectDocument(_ target: LocalMessageTarget, profileID: UUID) throws -> ProjectDocumentCapture {
+        try requireProjectAccess(profileID: profileID)
+        try requireWorkspaceAccess([target.conversationID])
+        guard let conversation = conversations.first(where: { $0.id == target.conversationID }),
+              let message = conversation.messages.first(where: { $0.id == target.messageID }),
+              project(for: conversation) != nil else { throw ProjectError.missing }
+        return try ProjectDocumentCapture(message: message, conversation: conversation, profileID: profileID)
     }
 
     private func commitProjectProfiles(_ candidate: [ConnectionProfile]) throws {

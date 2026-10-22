@@ -40,6 +40,7 @@ struct ChatView: View {
     @State private var contextPreview: ChatContextPreview?
     @State private var showingProjects = false
     @State private var referenceSelection: ProjectReferenceSelectionTarget?
+    @State private var documentCapture: ProjectDocumentCapture?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,7 +62,14 @@ struct ChatView: View {
                     LazyVStack(spacing: 20) {
                         ForEach(conversation.messages) { message in
                             MessageBubble(message: message, attachmentDirectory: model.attachmentDirectory,
-                                          highlighted: highlightedID == message.id.uuidString)
+                                          highlighted: highlightedID == message.id.uuidString,
+                                          captureAction: conversation.projectID == nil ? nil : {
+                                              performLocalAction {
+                                                  documentCapture = try model.captureProjectDocument(
+                                                      LocalMessageTarget(conversationID: conversation.id, messageID: message.id),
+                                                      profileID: model.activeProfileID)
+                                              }
+                                          }, captureDisabled: model.isSending || model.needsRecovery)
                                 .id(TimelineAnchor.message(message.id.uuidString))
                                 .contextMenu {
                                     Button(message.bookmark == nil ? "收藏消息" : "取消收藏", systemImage: message.bookmark == nil ? "bookmark" : "bookmark.fill") {
@@ -80,6 +88,15 @@ struct ChatView: View {
                                     }.disabled(model.needsRecovery)
                                     Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
                                         .disabled(message.content.isEmpty)
+                                    if conversation.projectID != nil {
+                                        Button("存为项目资料", systemImage: "doc.badge.plus") {
+                                            performLocalAction {
+                                                documentCapture = try model.captureProjectDocument(
+                                                    LocalMessageTarget(conversationID: conversation.id, messageID: message.id),
+                                                    profileID: model.activeProfileID)
+                                            }
+                                        }.disabled(model.needsRecovery || model.isSending || message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    }
                                     ShareLink(item: message.content) { Label("分享文字", systemImage: "square.and.arrow.up") }
                                         .disabled(message.content.isEmpty)
                                     Button("从这里创建分支", systemImage: "arrow.triangle.branch") {
@@ -125,6 +142,7 @@ struct ChatView: View {
         .sheet(item: $referenceSelection) { target in
             ProjectDocumentSelectionView(conversationID: target.conversationID, profileID: target.profileID)
         }
+        .sheet(item: $documentCapture) { capture in ProjectDocumentCaptureView(capture: capture) }
         .sheet(item: $settingsTarget) { target in
             ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
         }
@@ -565,6 +583,8 @@ private struct MessageBubble: View {
     let message: ChatMessage
     let attachmentDirectory: URL
     var highlighted = false
+    var captureAction: (() -> Void)? = nil
+    var captureDisabled = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -588,6 +608,13 @@ private struct MessageBubble: View {
                 }
                 if !message.content.isEmpty {
                     MessageContentView(text: message.content, rendersMarkdown: message.role == .assistant)
+                }
+                if let captureAction, !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button(action: captureAction) {
+                        Label("存为项目资料", systemImage: "doc.badge.plus")
+                            .font(.caption).foregroundStyle(HermesTheme.accent).frame(minHeight: 44)
+                    }.buttonStyle(.plain).disabled(captureDisabled)
+                        .accessibilityIdentifier("capture-message-\(message.id)")
                 }
             }
             .padding(.horizontal, 15)

@@ -192,6 +192,7 @@ private struct MessageLibraryDetailView: View {
     @State private var failure: String?
     @State private var notice: String?
     @State private var copied = false
+    @State private var documentCapture: ProjectDocumentCapture?
     private var item: MessageLibraryItem? { model.libraryItem(target) }
 
     var body: some View {
@@ -242,6 +243,13 @@ private struct MessageLibraryDetailView: View {
                                 }
                             } label: { Label("引用到当前草稿", systemImage: "text.quote") }
                                 .disabled(model.needsRecovery)
+                            if let conversation = model.conversations.first(where: { $0.id == target.conversationID }),
+                               conversation.projectID != nil {
+                                Button {
+                                    perform { documentCapture = try model.captureProjectDocument(target, profileID: model.activeProfileID) }
+                                } label: { Label("存为来源项目的资料", systemImage: "doc.badge.plus") }
+                                    .disabled(model.needsRecovery || model.isSending || item.message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
                             Button {
                                 UIPasteboard.general.string = item.message.content
                                 copied = true
@@ -274,6 +282,7 @@ private struct MessageLibraryDetailView: View {
         .sheet(isPresented: $editingNote) {
             BookmarkNoteView(target: target, note: item?.message.bookmark?.note ?? "")
         }
+        .sheet(item: $documentCapture) { capture in ProjectDocumentCaptureView(capture: capture) }
         .alert("本机操作失败", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("知道了", role: .cancel) { failure = nil }
         } message: { Text(failure ?? "") }

@@ -67,6 +67,7 @@ struct ProjectDocument: Identifiable, Codable, Equatable {
 
 enum ProjectDocumentError: LocalizedError {
     case invalid, collectionLimit, missing, selection, selectionTooLarge, referencedSelectionTooLarge, importFormat, importTooLarge
+    case changedDocument, changedSelection, noText, captureTooLarge
     var errorDescription: String? {
         switch self {
         case .invalid: "资料标题需为 1–80 字符且不换行，正文需为 1–20,000 字符。"
@@ -77,6 +78,33 @@ enum ProjectDocumentError: LocalizedError {
         case .referencedSelectionTooLarge: "此修改会使已有对话引用超过 50,000 字符，请先取消部分引用或缩短资料。"
         case .importFormat: "请选择 UTF-8 编码的 .txt 或 .md 纯文本文件，不支持二进制内容。"
         case .importTooLarge: "导入文件不能超过 256 KiB。"
+        case .changedDocument: "资料已在其他窗口更新，当前输入尚未保存。请保留输入，或载入最新资料后重新编辑。"
+        case .changedSelection: "对话的项目或参考资料已在其他窗口改变，请载入当前选择后重新整理。"
+        case .noText: "这条消息没有可保存的文字，图片不会自动转换成资料。"
+        case .captureTooLarge: "消息正文超过 100,000 字符，请复制需要的片段后新建资料。"
         }
+    }
+}
+
+// A reviewed draft only: creating this value neither persists knowledge nor changes chat drafts.
+struct ProjectDocumentCapture: Identifiable {
+    let id = UUID()
+    let projectID: UUID
+    let profileID: UUID
+    let document: ProjectDocument
+    let sourceDescription: String
+
+    init(message: ChatMessage, conversation: Conversation, profileID: UUID) throws {
+        guard let projectID = conversation.projectID else { throw ProjectError.missing }
+        guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ProjectDocumentError.noText }
+        guard message.content.count <= 100_000 else { throw ProjectDocumentError.captureTooLarge }
+        self.projectID = projectID
+        self.profileID = profileID
+        let role = message.role == .user ? "我" : "Hermes"
+        let sourceTitle = String(conversation.title.prefix(120)) + (conversation.title.count > 120 ? "…" : "")
+        sourceDescription = "本机对话「\(sourceTitle)」中的\(role)消息"
+        let title = String((conversation.title + " · " + role).prefix(ProjectDocument.titleLimit))
+        let imageNote = message.imageID == nil ? "" : "\n\n[原消息中的图片未包含在此资料中]"
+        document = ProjectDocument(title: title, body: "来源：\(sourceTitle) · \(role)\n\n" + message.content + imageNote)
     }
 }

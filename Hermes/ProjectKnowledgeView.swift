@@ -312,6 +312,14 @@ struct ProjectDocumentDetailView: View {
     }
 }
 
+struct ProjectDocumentCaptureView: View {
+    let capture: ProjectDocumentCapture
+    var body: some View {
+        ProjectDocumentEditorView(projectID: capture.projectID, profileID: capture.profileID,
+            importedDocument: capture.document, sourceDescription: capture.sourceDescription, onSaved: {})
+    }
+}
+
 struct ProjectDocumentEditorView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -320,11 +328,15 @@ struct ProjectDocumentEditorView: View {
     var document: ProjectDocument? = nil
     var importedDocument: ProjectDocument? = nil
     var sourceFilename: String? = nil
+    var sourceDescription: String? = nil
     let onSaved: () -> Void
     @State private var title = ""
     @State private var text = ""
     @State private var loaded = false
     @State private var error: String?
+    @State private var baseDocument: ProjectDocument?
+    @State private var confirmingReload = false
+    @State private var copiedInput = false
 
     private var project: LocalProject? { model.activeProfileID == profileID ? model.projects.first { $0.id == projectID } : nil }
     private var otherCharacterCount: Int { (project?.documents ?? []).filter { $0.id != document?.id }.reduce(0) { $0 + $1.body.count } }
@@ -334,8 +346,10 @@ struct ProjectDocumentEditorView: View {
         return !project.documents.contains { $0.id == document.id }
     }
     private var changedContext: Bool { model.activeProfileID != profileID || project == nil || originalDocumentMissing }
+    private var latestDocument: ProjectDocument? { document.flatMap { original in project?.documents.first { $0.id == original.id } } }
+    private var externalChange: Bool { loaded && document != nil && latestDocument != nil && latestDocument != baseDocument }
     private var canSave: Bool {
-        !changedContext && !model.isSending && !model.needsRecovery &&
+        loaded && !changedContext && !externalChange && !model.isSending && !model.needsRecovery &&
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && title.count <= ProjectDocument.titleLimit &&
         !title.contains(where: { $0.isNewline }) && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         text.count <= ProjectDocument.bodyLimit && projectedCount <= ProjectDocument.projectCharacterLimit &&
@@ -347,7 +361,11 @@ struct ProjectDocumentEditorView: View {
             Form {
                 Section {
                     Label(project?.name ?? "当前项目", systemImage: "folder").foregroundStyle(HermesTheme.accent)
-                    if let sourceFilename {
+                    if let sourceDescription {
+                        Text(sourceDescription).font(.subheadline)
+                        Text("仅预填这条消息的文字与来源说明，不包含图片或收藏备注。检查编辑并保存后才加入项目；不会自动引用或发送。")
+                            .font(.caption).foregroundStyle(HermesTheme.muted)
+                    } else if let sourceFilename {
                         Text("来源：\(sourceFilename)").font(.subheadline)
                         Text("文件内容只预填到此编辑器。检查并点击保存后，才会写入本机资料库。后续修改文件不会自动同步。")
                             .font(.caption).foregroundStyle(HermesTheme.muted)
@@ -382,6 +400,21 @@ struct ProjectDocumentEditorView: View {
                     Text(originalDocumentMissing ? "原资料已被删除，当前输入仍保留，无法覆盖保存。需要保留时可复制内容后关闭，再新建资料。" : "当前连接或项目已改变，当前输入仍保留。请复制需要保留的内容，再返回资料库。")
                         .foregroundStyle(.orange).listRowBackground(HermesTheme.surface)
                 }
+                if externalChange {
+                    Section {
+                        Label("资料已在其他窗口更新", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        Text("当前输入仍留在此编辑器中，尚未覆盖最新资料。先复制输入，或确认载入最新版本后继续编辑。")
+                            .font(.caption).foregroundStyle(HermesTheme.muted)
+                        Button("载入最新资料") { confirmingReload = true }
+                    }.listRowBackground(HermesTheme.surface)
+                }
+                Section {
+                    Button(copiedInput ? "当前输入已复制" : "复制当前标题与正文", systemImage: copiedInput ? "checkmark" : "doc.on.doc") {
+                        UIPasteboard.general.string = "# \(title)\n\n\(text)"
+                        copiedInput = true
+                    }.disabled(title.isEmpty && text.isEmpty)
+                } footer: { Text("编辑器输入不会自动保存为草稿；关闭前可复制需要保留的内容。") }
+                    .listRowBackground(HermesTheme.surface)
             }
             .scrollContentBackground(.hidden).background(HermesTheme.background)
             .navigationTitle(document == nil ? "新建参考资料" : "编辑参考资料").navigationBarTitleDisplayMode(.inline)
@@ -396,6 +429,16 @@ struct ProjectDocumentEditorView: View {
                 loaded = true
                 title = (document ?? importedDocument)?.title ?? ""
                 text = (document ?? importedDocument)?.body ?? ""
+                baseDocument = document
+            }
+            .onChange(of: title) { _, _ in copiedInput = false }
+            .onChange(of: text) { _, _ in copiedInput = false }
+            .confirmationDialog("载入最新资料并替换当前未保存输入？", isPresented: $confirmingReload, titleVisibility: .visible) {
+                Button("替换输入，载入最新资料", role: .destructive) {
+                    guard let latest = latestDocument else { return }
+                    title = latest.title; text = latest.body; baseDocument = latest; copiedInput = false
+                }
+                Button("保留当前输入", role: .cancel) {}
             }
             .alert("资料尚未保存", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("继续编辑", role: .cancel) { error = nil }
@@ -408,7 +451,8 @@ struct ProjectDocumentEditorView: View {
             return
         }
         do {
-            _ = try model.saveProjectDocument(id: document?.id, projectID: projectID, title: title, body: text, profileID: profileID)
+            _ = try model.saveProjectDocument(id: document?.id, projectID: projectID, title: title, body: text,
+                profileID: profileID, expectedDocument: baseDocument)
             onSaved()
             dismiss()
         } catch { self.error = error.localizedDescription }
@@ -422,9 +466,11 @@ struct ProjectDocumentSelectionView: View {
     let profileID: UUID
     @State private var selectedIDs: [UUID] = []
     @State private var originalProjectID: UUID?
+    @State private var originalSelection: [UUID] = []
     @State private var loaded = false
     @State private var query = ""
     @State private var error: String?
+    @State private var confirmingSelectionReload = false
 
     private var conversation: Conversation? {
         guard model.activeProfileID == profileID else { return nil }
@@ -443,8 +489,9 @@ struct ProjectDocumentSelectionView: View {
         (loaded && originalProjectID != conversation?.projectID)
     }
     private var canChange: Bool { !changedContext && project != nil && conversation?.isTrashed != true && !model.isSending && !model.needsRecovery }
+    private var externalSelectionChange: Bool { loaded && originalSelection != (conversation?.referenceDocumentIDs ?? []) }
     private var canSave: Bool {
-        canChange && !missingSelections && selectedIDs.count <= ProjectDocument.selectionLimit &&
+        loaded && canChange && !externalSelectionChange && !missingSelections && selectedIDs.count <= ProjectDocument.selectionLimit &&
         selectedCharacterCount <= ProjectDocument.selectionCharacterLimit
     }
 
@@ -473,6 +520,10 @@ struct ProjectDocumentSelectionView: View {
                 }
             }
             .onAppear { if !loaded { loadSelection() } }
+            .confirmationDialog("载入当前已保存的引用，替换这次未保存的选择？", isPresented: $confirmingSelectionReload, titleVisibility: .visible) {
+                Button("载入当前选择") { loadSelection() }
+                Button("保留本次选择", role: .cancel) {}
+            }
             .alert("无法选择资料", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("知道了", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
@@ -498,11 +549,41 @@ struct ProjectDocumentSelectionView: View {
                     }
                 }.padding(.vertical, 6)
             }.listRowBackground(Color.clear)
+            if externalSelectionChange {
+                Section {
+                    Label("引用已在其他窗口改变", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    Text("本次整理尚未保存，不会覆盖其他窗口的新选择。请载入当前已保存的引用后重新整理。")
+                        .font(.caption).foregroundStyle(HermesTheme.muted)
+                    Button("载入当前选择") { confirmingSelectionReload = true }.disabled(!canChange)
+                }.listRowBackground(HermesTheme.surface)
+            }
+            if !selectedIDs.isEmpty {
+                Section {
+                    ForEach(Array(selectedIDs.enumerated()), id: \.element) { index, id in
+                        HStack(spacing: 8) {
+                            Text("\(index + 1)").font(.headline).foregroundStyle(HermesTheme.accent).frame(width: 24)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(documents.first { $0.id == id }?.title ?? "资料已删除").font(.subheadline.weight(.semibold)).lineLimit(2)
+                                Text("\(documents.first { $0.id == id }?.body.count ?? 0) 字符").font(.caption).foregroundStyle(HermesTheme.muted)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            Button { move(id, by: -1) } label: { Image(systemName: "arrow.up").frame(width: 36, height: 44) }
+                                .disabled(!canChange || index == 0).accessibilityLabel("上移第 \(index + 1) 份资料")
+                            Button { move(id, by: 1) } label: { Image(systemName: "arrow.down").frame(width: 36, height: 44) }
+                                .disabled(!canChange || index == selectedIDs.count - 1).accessibilityLabel("下移第 \(index + 1) 份资料")
+                            Button { selectedIDs.removeAll { $0 == id } } label: { Image(systemName: "xmark.circle").frame(width: 36, height: 44) }
+                                .disabled(!canChange).accessibilityLabel("移除第 \(index + 1) 份引用")
+                        }.buttonStyle(.borderless).listRowBackground(HermesTheme.surface)
+                            .accessibilityIdentifier("reference-order-\(id)")
+                    }
+                } header: { Text("已选资料 · 请求顺序") } footer: {
+                    Text("用上下箭头调整顺序；资料编号随顺序更新。移除仅改变本次选择，点击保存后生效。")
+                }
+            }
             if missingSelections || selectedCharacterCount > ProjectDocument.selectionCharacterLimit {
                 Section {
                     Text("资料库已发生变化，请调整选择或重新载入。超出字符上限时不能保存，正文不会截断。")
                         .font(.caption).foregroundStyle(.orange)
-                    Button("重新载入已保存的选择") { loadSelection() }.disabled(!canChange)
+                    Button("重新载入已保存的选择") { confirmingSelectionReload = true }.disabled(!canChange)
                 }.listRowBackground(HermesTheme.surface)
             }
             if model.isSending || model.needsRecovery {
@@ -540,10 +621,12 @@ struct ProjectDocumentSelectionView: View {
     }
     private func loadSelection() {
         selectedIDs = conversation?.referenceDocumentIDs ?? []
+        originalSelection = selectedIDs
         originalProjectID = conversation?.projectID
         loaded = true
     }
     private func toggle(_ document: ProjectDocument) {
+        guard canChange else { return }
         if selectedIDs.contains(document.id) { selectedIDs.removeAll { $0 == document.id }; return }
         guard selectedIDs.count < ProjectDocument.selectionLimit else {
             error = "最多选择 \(ProjectDocument.selectionLimit) 篇资料，请先取消部分选择。"
@@ -555,13 +638,18 @@ struct ProjectDocumentSelectionView: View {
         }
         selectedIDs.append(document.id)
     }
+    private func move(_ id: UUID, by offset: Int) {
+        guard canChange, let index = selectedIDs.firstIndex(of: id), selectedIDs.indices.contains(index + offset) else { return }
+        selectedIDs.swapAt(index, index + offset)
+    }
     private func save() {
         guard loaded, canSave, originalProjectID == conversation?.projectID else {
             error = "当前连接、项目或资料选择已改变，请检查后重新保存；尚未更改对话引用。"
             return
         }
         do {
-            try model.selectProjectDocuments(selectedIDs, conversationID: conversationID, profileID: profileID)
+            try model.selectProjectDocuments(selectedIDs, conversationID: conversationID, profileID: profileID,
+                expectedSelection: originalSelection, expectedProjectID: originalProjectID)
             dismiss()
         } catch { self.error = error.localizedDescription }
     }
