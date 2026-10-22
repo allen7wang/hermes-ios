@@ -10,6 +10,7 @@
 		002E7C1BE292174E4A0FFD3A /* MessageSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D0C51F4AE0B859BEC48115E /* MessageSearchView.swift */; };
 		040CD618F265C72AA2042D17 /* ProjectVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 065FF438865EA88631FD1171 /* ProjectVisualTests.swift */; };
 		04185E38494036B4BC5B7B37 /* ChatContextPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = F416E4723638FC541FD4E379 /* ChatContextPreview.swift */; };
+		0531FD767FE21CFD7F0AE2E4 /* ProjectDocumentUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A92F302627244DC718DA48 /* ProjectDocumentUsageTests.swift */; };
 		0C4A6F8442A0B5CEC9B6A8DC /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F103E1FAD249F946109D6584 /* HistoryView.swift */; };
 		101A515C741AC7D9DFB221AE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 978596CE1088B787E74B285E /* SettingsView.swift */; };
 		12D421320DDF932F1D18BF6F /* RemoteConversationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35AC6B866DC1635D55AAB4AA /* RemoteConversationModel.swift */; };
@@ -38,12 +39,15 @@
 		6158C3ACAE7B7034BC2B117A /* BookmarkNoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA9EA9310926AE4991E8FDF /* BookmarkNoteView.swift */; };
 		615C7CADB1CFC5D78880F190 /* WorkbenchVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA2E230CC2D56679332F018 /* WorkbenchVisualTests.swift */; };
 		6263CB6B02D325949F7FBCB6 /* StreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFDBC33F6E85DE9D8A539338 /* StreamingTests.swift */; };
+		649735FBB15C89EB9A46B9D9 /* ProjectDocumentUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6737EA7FCBE1379A6801085F /* ProjectDocumentUsage.swift */; };
+		6661BE03CF89D2B7947330C2 /* ProjectDocumentUsageVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B7AD4B7BA78AA31A7FCE6F9 /* ProjectDocumentUsageVisualTests.swift */; };
 		69B9CD0816E1A31B754D752D /* ConnectionProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6408748EE751804A8BE46 /* ConnectionProfile.swift */; };
 		752BFAABB47BDAC3380A44FB /* ConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC847C5D0869EF644B706EE4 /* ConnectionTests.swift */; };
 		7B06E3777F973BC9128FB3F9 /* RemoteTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D603EB8935436D9B4C263C /* RemoteTimestamp.swift */; };
 		80405E8F0E8608BCEB647FA8 /* ConversationWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60DCF367C18FAB5FB59387E /* ConversationWorkspace.swift */; };
 		825EEEDEE94508978E293654 /* CodeHighlighterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A64EE1220D9F8C5C8710330 /* CodeHighlighterTests.swift */; };
 		842FEC841DB5C4C81A1EAA22 /* SessionStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFE4F80A2E75F738D1DF742 /* SessionStream.swift */; };
+		84CDAF14A6A4444B1A80A955 /* ProjectDocumentUsageModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0874ACBA2373EF4347CFAD /* ProjectDocumentUsageModelTests.swift */; };
 		8617CFA140D2B6D6D3DC2627 /* MarkdownTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BCA0161E454C8198C086E0 /* MarkdownTheme.swift */; };
 		898A2169D3EAEA49966B6938 /* HermesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4CFD5BA3BED7770588BF6A /* HermesApp.swift */; };
 		915D3952B7BB071CA41223DB /* MessageContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A32442E9B2DE079A5A238DA /* MessageContentView.swift */; };
@@ -58,6 +62,7 @@
 		C396C9B56B4FCFF6615495DF /* ProjectKnowledgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */; };
 		C526745303AE1F2D287EFEB1 /* ProjectDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2043DC8C97A0CF5484A730B /* ProjectDocumentTests.swift */; };
 		C60830660BDBD1E63354C8FF /* LocalProject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DF1FF3D7FD619A795135EBC /* LocalProject.swift */; };
+		C7AA4D4C03FBADDB2B77BF8D /* ProjectDocumentUsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3DA49D038AFB30F8E73279 /* ProjectDocumentUsageView.swift */; };
 		C915847C31AFD384D21A2E24 /* ConversationBranchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7CAFF5D46C759AC52DEBF1A /* ConversationBranchTests.swift */; };
 		CCB4882E42B9CE3B2C799D06 /* PromptTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2AC6113348C69D16B95376 /* PromptTemplate.swift */; };
 		CEBAFD67AE0488E6F23A64BE /* RemoteWorkspaceComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D9512A229B4F10175F1D1E /* RemoteWorkspaceComponents.swift */; };
@@ -97,8 +102,10 @@
 /* Begin PBXFileReference section */
 		0049E3692406A81E50FCCAD4 /* Theme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		008C727ADE52324315685F96 /* TrashConversationView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TrashConversationView.swift; sourceTree = "<group>"; };
+		00A92F302627244DC718DA48 /* ProjectDocumentUsageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentUsageTests.swift; sourceTree = "<group>"; };
 		01440E4DB1FAFBF6B192E691 /* HermesClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HermesClient.swift; sourceTree = "<group>"; };
 		065FF438865EA88631FD1171 /* ProjectVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectVisualTests.swift; sourceTree = "<group>"; };
+		0B7AD4B7BA78AA31A7FCE6F9 /* ProjectDocumentUsageVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentUsageVisualTests.swift; sourceTree = "<group>"; };
 		0CE633AA711492BEB698843D /* AppShell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppShell.swift; sourceTree = "<group>"; };
 		12B6321212352660534CFA64 /* RemoteJobDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteJobDetailView.swift; sourceTree = "<group>"; };
 		12BB5F32E7DCE25CAB477328 /* KeychainStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
@@ -116,6 +123,7 @@
 		3A64EE1220D9F8C5C8710330 /* CodeHighlighterTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CodeHighlighterTests.swift; sourceTree = "<group>"; };
 		3AA2E230CC2D56679332F018 /* WorkbenchVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkbenchVisualTests.swift; sourceTree = "<group>"; };
 		40D9512A229B4F10175F1D1E /* RemoteWorkspaceComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteWorkspaceComponents.swift; sourceTree = "<group>"; };
+		4A0874ACBA2373EF4347CFAD /* ProjectDocumentUsageModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentUsageModelTests.swift; sourceTree = "<group>"; };
 		4FFA3EDAAF6A04F3B595630C /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50454D58F18B2420F79E7436 /* ChatTimeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatTimeline.swift; sourceTree = "<group>"; };
 		5A32442E9B2DE079A5A238DA /* MessageContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageContentView.swift; sourceTree = "<group>"; };
@@ -125,6 +133,7 @@
 		626CB658BDCDB6DC25CB7E91 /* HermesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HermesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6408011827CABA1C59A52550 /* ConversationSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationSettingsView.swift; sourceTree = "<group>"; };
 		6408E8293B870D194A8E718D /* RemoteJobEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteJobEditorView.swift; sourceTree = "<group>"; };
+		6737EA7FCBE1379A6801085F /* ProjectDocumentUsage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentUsage.swift; sourceTree = "<group>"; };
 		6D0C51F4AE0B859BEC48115E /* MessageSearchView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageSearchView.swift; sourceTree = "<group>"; };
 		6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectKnowledgeView.swift; sourceTree = "<group>"; };
 		7A3DDB0149B8B7C3DE5C1542 /* DraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DraftStore.swift; sourceTree = "<group>"; };
@@ -148,6 +157,7 @@
 		B60DCF367C18FAB5FB59387E /* ConversationWorkspace.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationWorkspace.swift; sourceTree = "<group>"; };
 		BAC952520B8E67B4038064FB /* BackupView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		BC847C5D0869EF644B706EE4 /* ConnectionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConnectionTests.swift; sourceTree = "<group>"; };
+		BF3DA49D038AFB30F8E73279 /* ProjectDocumentUsageView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentUsageView.swift; sourceTree = "<group>"; };
 		C0722B05FB0448A9032EFBDA /* RemoteSessionDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteSessionDetailView.swift; sourceTree = "<group>"; };
 		C2043DC8C97A0CF5484A730B /* ProjectDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentTests.swift; sourceTree = "<group>"; };
 		C28409E01CF3C9A582AF3ADF /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -267,6 +277,8 @@
 				6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */,
 				155236898C0432523C316F1A /* ProjectDocumentBatch.swift */,
 				844AE207E3976F14927F4230 /* ProjectDocumentBatchView.swift */,
+				6737EA7FCBE1379A6801085F /* ProjectDocumentUsage.swift */,
+				BF3DA49D038AFB30F8E73279 /* ProjectDocumentUsageView.swift */,
 			);
 			name = Hermes;
 			path = Hermes;
@@ -302,6 +314,9 @@
 				84864B2CB01C3F361B9F9636 /* ProjectDocumentVisualTests.swift */,
 				7E8042C5F234694B2BE9843F /* KnowledgeIterationTests.swift */,
 				60AB06CDE64296F005E1A6D3 /* ProjectDocumentBatchTests.swift */,
+				4A0874ACBA2373EF4347CFAD /* ProjectDocumentUsageModelTests.swift */,
+				00A92F302627244DC718DA48 /* ProjectDocumentUsageTests.swift */,
+				0B7AD4B7BA78AA31A7FCE6F9 /* ProjectDocumentUsageVisualTests.swift */,
 			);
 			name = HermesTests;
 			path = HermesTests;
@@ -465,6 +480,8 @@
 				C396C9B56B4FCFF6615495DF /* ProjectKnowledgeView.swift in Sources */,
 				54F35893F50A4B92837DFA34 /* ProjectDocumentBatch.swift in Sources */,
 				E817669049A47B16C50B1B9C /* ProjectDocumentBatchView.swift in Sources */,
+				649735FBB15C89EB9A46B9D9 /* ProjectDocumentUsage.swift in Sources */,
+				C7AA4D4C03FBADDB2B77BF8D /* ProjectDocumentUsageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -491,6 +508,9 @@
 				320A48EDF8EE6722E06CEAE3 /* ProjectDocumentVisualTests.swift in Sources */,
 				DB183D0BAF9B4E1903020479 /* KnowledgeIterationTests.swift in Sources */,
 				F91A723D85F053F4E2E6C49D /* ProjectDocumentBatchTests.swift in Sources */,
+				84CDAF14A6A4444B1A80A955 /* ProjectDocumentUsageModelTests.swift in Sources */,
+				0531FD767FE21CFD7F0AE2E4 /* ProjectDocumentUsageTests.swift in Sources */,
+				6661BE03CF89D2B7947330C2 /* ProjectDocumentUsageVisualTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -537,7 +557,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2.0;
+				MARKETING_VERSION = 3.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;
@@ -635,7 +655,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2.0;
+				MARKETING_VERSION = 3.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;

@@ -16,16 +16,20 @@ struct ProjectDocumentBatchView: View {
     @State private var selection: Set<UUID> = []
     @State private var copyReview: DocumentBatchReview?
     @State private var exportReview: DocumentBatchReview?
-    @State private var deletionReview: DocumentBatchReview?
-    @State private var confirmingDeletion = false
+    @State private var deletionReview: ProjectDocumentDeletionReview?
+    @State private var usageFilter: ProjectDocumentUsageFilter = .all
+    @State private var usageSort: ProjectDocumentUsageSort = .recent
     @State private var error: String?
     @State private var message: String?
 
     private var project: LocalProject? { model.activeProfileID == profileID ? model.projects.first { $0.id == projectID } : nil }
     private var documents: [ProjectDocument] { ProjectDocumentBatch.ordered(project?.documents ?? []) }
+    private var references: [ProjectDocumentUsage.Reference] {
+        ProjectDocumentUsage.references(documentIDs: Set(documents.map(\.id)), projectID: projectID, profileID: profileID,
+            conversations: model.projectDocumentConversations(projectID: projectID, profileID: profileID))
+    }
     private var visible: [ProjectDocument] {
-        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return documents.filter { text.isEmpty || $0.title.localizedStandardContains(text) || $0.body.localizedStandardContains(text) }
+        ProjectDocumentUsage.filtered(documents, query: query, filter: usageFilter, sort: usageSort, references: references)
     }
     private var selected: [ProjectDocument] { documents.filter { selection.contains($0.id) } }
     private var unavailable: Bool { project == nil || model.isSending || model.needsRecovery }
@@ -42,11 +46,11 @@ struct ProjectDocumentBatchView: View {
                         .font(.headline).accessibilityIdentifier("knowledge-batch-count")
                     let hidden = selected.filter { item in !visible.contains { $0.id == item.id } }.count
                     if hidden > 0 {
-                        Text("其中 \(hidden) 篇被搜索条件隐藏，仍在本次选择中。")
+                        Text("其中 \(hidden) 篇被搜索或引用筛选隐藏，仍在本次选择中。")
                             .font(.caption).foregroundStyle(.orange)
                     }
                     HStack {
-                        Button(allVisibleSelected ? "取消选择搜索结果" : "选择搜索结果") {
+                        Button(allVisibleSelected ? "取消选择当前结果" : "选择当前结果") {
                             let ids = Set(visible.map(\.id))
                             if allVisibleSelected { selection.subtract(ids) } else { selection.formUnion(ids) }
                             message = nil
@@ -57,7 +61,13 @@ struct ProjectDocumentBatchView: View {
                     if let message { Label(message, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(.green) }
                     if unavailable { Text("当前连接、项目或写入状态暂不可用，请返回检查。 ").font(.caption).foregroundStyle(.orange) }
                 }.listRowBackground(HermesTheme.surface)
-                Section("\(visible.count) 篇搜索结果") {
+                Section {
+                    ProjectDocumentUsageControls(filter: $usageFilter, sort: $usageSort)
+                        .disabled(model.needsRecovery || project == nil)
+                } footer: {
+                    Text(model.needsRecovery ? "本机存储需要恢复，引用统计暂不可用。" : "引用包含归档和回收站。未引用只表示当前没有保存的选择，请检查后再清理。")
+                }.listRowBackground(HermesTheme.surface)
+                Section("\(visible.count) 篇当前结果") {
                     ForEach(visible) { document in
                         Button {
                             if selection.contains(document.id) { selection.remove(document.id) } else { selection.insert(document.id) }
@@ -66,7 +76,7 @@ struct ProjectDocumentBatchView: View {
                             HStack(alignment: .top, spacing: 12) {
                                 Image(systemName: selection.contains(document.id) ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(HermesTheme.accent).padding(.top, 8)
-                                ProjectDocumentRow(document: document)
+                                ProjectDocumentRow(document: document, referenceCount: model.needsRecovery ? nil : ProjectDocumentUsage.forDocument(document.id, in: references).count)
                             }.contentShape(Rectangle())
                         }.buttonStyle(.plain).disabled(unavailable)
                             .accessibilityLabel("\(document.title)，\(selection.contains(document.id) ? "已选择" : "未选择")")
@@ -81,8 +91,11 @@ struct ProjectDocumentBatchView: View {
                     Button("复制到其他项目", systemImage: "doc.on.doc") {
                         review { copyReview = $0 }
                     }.accessibilityIdentifier("knowledge-batch-copy")
-                    Button("删除所选资料", systemImage: "trash", role: .destructive) {
-                        review { deletionReview = $0; confirmingDeletion = true }
+                    Button("检查并删除所选资料", systemImage: "trash", role: .destructive) {
+                        review {
+                            do { deletionReview = try model.reviewProjectDocumentDeletion($0.documents, projectID: projectID, profileID: profileID) }
+                            catch { self.error = error.localizedDescription }
+                        }
                     }.accessibilityIdentifier("knowledge-batch-delete")
                 } header: { Text("所选资料") } footer: {
                     Text("复制会新建独立资料，保留同名项；原资料和对话引用保持原状。删除需再次确认，并解除所有相关对话的引用。")
@@ -100,11 +113,12 @@ struct ProjectDocumentBatchView: View {
             .sheet(item: $exportReview) { review in
                 ProjectDocumentExportView(projectName: review.projectName, documents: review.documents)
             }
-            .confirmationDialog("删除所选 \(deletionReview?.documents.count ?? 0) 篇资料？", isPresented: $confirmingDeletion, titleVisibility: .visible) {
-                Button("删除资料并解除引用", role: .destructive) { deleteReviewed() }
-                Button("保留资料", role: .cancel) { deletionReview = nil }
-            } message: {
-                Text((deletionReview?.documents.map(\.title).joined(separator: "、") ?? "") + "\n\n将解除本项目所有相关对话（包括归档和回收站）的引用，保留聊天、草稿、图片和其他资料。删除无法直接撤销。")
+            .sheet(item: $deletionReview) { review in
+                ProjectDocumentDeletionReviewView(review: review) {
+                    selection.subtract(review.documents.map(\.id))
+                    message = "已删除 \(review.documents.count) 篇资料并解除相关引用"
+                    deletionReview = nil
+                }
             }
             .alert("资料操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("知道了", role: .cancel) { error = nil }
@@ -119,15 +133,6 @@ struct ProjectDocumentBatchView: View {
             guard !unavailable, let project else { throw ProjectError.changedContext }
             present(DocumentBatchReview(documents: try ProjectDocumentBatch.selected(selection, in: project), projectName: project.name))
         } catch { self.error = error.localizedDescription }
-    }
-    private func deleteReviewed() {
-        guard let review = deletionReview else { return }
-        do {
-            try model.deleteProjectDocuments(review.documents, projectID: projectID, profileID: profileID)
-            selection.subtract(review.documents.map(\.id))
-            message = "已删除 \(review.documents.count) 篇资料并解除相关引用"
-        } catch { self.error = error.localizedDescription }
-        deletionReview = nil
     }
 }
 

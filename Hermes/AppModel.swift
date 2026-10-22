@@ -347,6 +347,30 @@ final class AppModel: ObservableObject {
         try commitProjectTransaction(profiles: candidateProfiles, conversations: candidateConversations)
     }
 
+    /// Read-only inspection includes archive and trash, without selecting or restoring a conversation.
+    func projectDocumentConversations(projectID: UUID, profileID: UUID) -> [Conversation] {
+        guard !needsRecovery, activeProfileID == profileID,
+              projects.contains(where: { $0.id == projectID }) else { return [] }
+        return allConversations.filter { $0.profileID == profileID && $0.projectID == projectID }
+    }
+
+    func reviewProjectDocumentDeletion(_ documents: [ProjectDocument], projectID: UUID,
+                                       profileID: UUID) throws -> ProjectDocumentDeletionReview {
+        try requireProjectAccess(profileID: profileID)
+        guard let project = projects.first(where: { $0.id == projectID }) else { throw ProjectError.missing }
+        try ProjectDocumentBatch.validate(documents, in: project)
+        let references = ProjectDocumentUsage.references(documentIDs: Set(documents.map(\.id)), projectID: projectID,
+            profileID: profileID, conversations: allConversations)
+        return ProjectDocumentDeletionReview(profileID: profileID, projectID: projectID,
+            projectName: project.name, documents: documents, references: references)
+    }
+
+    func deleteReviewedProjectDocuments(_ review: ProjectDocumentDeletionReview) throws {
+        let current = try reviewProjectDocumentDeletion(review.documents, projectID: review.projectID, profileID: review.profileID)
+        guard current.references == review.references else { throw ProjectDocumentUsageError.changedReferences }
+        try deleteProjectDocuments(review.documents, projectID: review.projectID, profileID: review.profileID)
+    }
+
     func selectProjectDocuments(_ ids: [UUID], conversationID: UUID, profileID: UUID,
                                 expectedSelection: [UUID]? = nil, expectedProjectID: UUID? = nil) throws {
         try requireProjectAccess(profileID: profileID)

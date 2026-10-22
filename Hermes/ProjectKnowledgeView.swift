@@ -45,15 +45,20 @@ struct ProjectKnowledgeView: View {
     @State private var viewActive = false
     @State private var error: String?
     @State private var managing = false
+    @State private var usageFilter: ProjectDocumentUsageFilter = .all
+    @State private var usageSort: ProjectDocumentUsageSort = .recent
 
     private var project: LocalProject? {
         model.activeProfileID == profileID ? model.projects.first { $0.id == projectID } : nil
     }
     private var documents: [ProjectDocument] { project?.documents ?? [] }
     private var characterCount: Int { documents.reduce(0) { $0 + $1.body.count } }
+    private var references: [ProjectDocumentUsage.Reference] {
+        ProjectDocumentUsage.references(documentIDs: Set(documents.map(\.id)), projectID: projectID, profileID: profileID,
+            conversations: model.projectDocumentConversations(projectID: projectID, profileID: profileID))
+    }
     private var visible: [ProjectDocument] {
-        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return ProjectDocumentBatch.ordered(documents.filter { text.isEmpty || $0.title.localizedStandardContains(text) || $0.body.localizedStandardContains(text) })
+        ProjectDocumentUsage.filtered(documents, query: query, filter: usageFilter, sort: usageSort, references: references)
     }
     private var unavailable: Bool { project == nil || model.isSending || model.needsRecovery }
     private var canAdd: Bool { !unavailable && !readingFile && documents.count < ProjectDocument.collectionLimit && characterCount < ProjectDocument.projectCharacterLimit }
@@ -98,16 +103,22 @@ struct ProjectKnowledgeView: View {
                             }
                         }.padding(.vertical, 8)
                     }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    Section {
+                        ProjectDocumentUsageControls(filter: $usageFilter, sort: $usageSort)
+                            .disabled(model.needsRecovery)
+                    } footer: {
+                        Text(model.needsRecovery ? "本机存储需要恢复，引用统计暂不可用。" : "统计当前已保存的对话选择，包含归档与回收站。未引用不表示从未发送过这份资料。")
+                    }.listRowBackground(HermesTheme.surface)
                     Section("\(visible.count) 篇资料") {
                         if visible.isEmpty {
-                            ContentUnavailableView(query.isEmpty ? "还没有参考资料" : "没有匹配的资料",
+                            ContentUnavailableView(documents.isEmpty ? "还没有参考资料" : "没有匹配的资料",
                                 systemImage: "doc.text.magnifyingglass",
-                                description: Text(query.isEmpty ? "新建一篇资料，或导入文本文件。保存资料不会自动把它加入任何对话。" : "试试标题或正文中的其他关键词。"))
+                                description: Text(documents.isEmpty ? "新建一篇资料，或导入文本文件。保存资料不会自动把它加入任何对话。" : "调整引用筛选或搜索关键词后再试。"))
                                 .listRowBackground(Color.clear)
                         }
                         ForEach(visible) { document in
                             NavigationLink(value: ProjectDocumentRoute(documentID: document.id)) {
-                                ProjectDocumentRow(document: document)
+                                ProjectDocumentRow(document: document, referenceCount: model.needsRecovery ? nil : ProjectDocumentUsage.forDocument(document.id, in: references).count)
                             }.listRowBackground(HermesTheme.surface).accessibilityIdentifier("knowledge-row-\(document.id)")
                         }
                     }
@@ -208,10 +219,15 @@ struct ProjectKnowledgeView: View {
 
 struct ProjectDocumentRow: View {
     let document: ProjectDocument
+    var referenceCount: Int? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(document.title, systemImage: "doc.text").font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(2)
             Text(document.body).font(.subheadline).foregroundStyle(HermesTheme.muted).lineLimit(2)
+            if let referenceCount {
+                Label(referenceCount == 0 ? "暂无已保存的引用" : "\(referenceCount) 段对话引用", systemImage: "link")
+                    .font(.caption).foregroundStyle(referenceCount == 0 ? HermesTheme.muted : HermesTheme.accent)
+            }
             HStack {
                 Text("\(document.body.count.formatted()) 字符")
                 Spacer(minLength: 8)
@@ -228,7 +244,7 @@ struct ProjectDocumentDetailView: View {
     let profileID: UUID
     let documentID: UUID
     @State private var editingDocument: ProjectDocument?
-    @State private var confirmingDeletion = false
+    @State private var deletionReview: ProjectDocumentDeletionReview?
     @State private var copied = false
     @State private var exportedDocument: ConversationDocument?
     @State private var exporting = false
@@ -253,6 +269,15 @@ struct ProjectDocumentDetailView: View {
                             }.font(.caption).foregroundStyle(HermesTheme.muted)
                         }.padding(.vertical, 8)
                     }.listRowBackground(Color.clear)
+                    Section {
+                        NavigationLink {
+                            ProjectDocumentUsageView(projectID: projectID, profileID: profileID, documentID: documentID)
+                        } label: {
+                            Label("查看当前引用与关联对话", systemImage: "link")
+                        }.disabled(model.needsRecovery).accessibilityIdentifier("knowledge-usage")
+                    } footer: {
+                        Text("包括归档和回收站中的已保存选择。此处用于检查当前引用，不追溯历史请求。")
+                    }.listRowBackground(HermesTheme.surface)
                     Section("完整正文") {
                         Text(document.body).font(.subheadline).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
@@ -265,15 +290,6 @@ struct ProjectDocumentDetailView: View {
                     }.listRowBackground(HermesTheme.surface)
                 }
                 .listStyle(.insetGrouped).scrollContentBackground(.hidden).background(HermesTheme.background)
-                .confirmationDialog("删除「\(document.title)」？", isPresented: $confirmingDeletion, titleVisibility: .visible) {
-                    Button("删除资料并解除引用", role: .destructive) {
-                        do { try model.deleteProjectDocument(documentID, projectID: projectID, profileID: profileID); dismiss() }
-                        catch { self.error = error.localizedDescription }
-                    }
-                    Button("取消", role: .cancel) {}
-                } message: {
-                    Text("该资料将从项目资料库删除，并解除所有对话（包括回收站）的引用。聊天消息、收藏和草稿会保留。")
-                }
             } else {
                 ContentUnavailableView("资料已改变", systemImage: "doc.badge.ellipsis",
                     description: Text(model.activeProfileID != profileID ? "当前连接已改变，请返回后重新打开。" : "资料或项目可能已删除，请返回资料库。"))
@@ -283,6 +299,9 @@ struct ProjectDocumentDetailView: View {
         .navigationTitle("资料详情").navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editingDocument) { snapshot in
             ProjectDocumentEditorView(projectID: projectID, profileID: profileID, document: snapshot) { editingDocument = nil }
+        }
+        .sheet(item: $deletionReview) { review in
+            ProjectDocumentDeletionReviewView(review: review) { deletionReview = nil }
         }
         .toolbar {
             if let document {
@@ -313,7 +332,10 @@ struct ProjectDocumentDetailView: View {
             exportedDocument = ConversationDocument(text: "# \(document.title)\n\n\(document.body)\n")
             exporting = true
         }.accessibilityIdentifier("knowledge-export")
-        Button("删除资料", systemImage: "trash", role: .destructive) { confirmingDeletion = true }.disabled(unavailable)
+        Button("检查并删除资料", systemImage: "trash", role: .destructive) {
+            do { deletionReview = try model.reviewProjectDocumentDeletion([document], projectID: projectID, profileID: profileID) }
+            catch { self.error = error.localizedDescription }
+        }.disabled(unavailable)
             .accessibilityIdentifier("knowledge-delete")
     }
 }
