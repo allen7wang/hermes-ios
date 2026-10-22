@@ -245,6 +245,7 @@ struct ProjectDocumentDetailView: View {
     let documentID: UUID
     @State private var editingDocument: ProjectDocument?
     @State private var deletionReview: ProjectDocumentDeletionReview?
+    @State private var replacingReferences = false
     @State private var copied = false
     @State private var exportedDocument: ConversationDocument?
     @State private var exporting = false
@@ -275,6 +276,8 @@ struct ProjectDocumentDetailView: View {
                         } label: {
                             Label("查看当前引用与关联对话", systemImage: "link")
                         }.disabled(model.needsRecovery).accessibilityIdentifier("knowledge-usage")
+                        Button("替换这篇资料的引用", systemImage: "arrow.triangle.2.circlepath") { replacingReferences = true }
+                            .disabled(unavailable).accessibilityIdentifier("knowledge-replace-references")
                     } footer: {
                         Text("包括归档和回收站中的已保存选择。此处用于检查当前引用，不追溯历史请求。")
                     }.listRowBackground(HermesTheme.surface)
@@ -302,6 +305,9 @@ struct ProjectDocumentDetailView: View {
         }
         .sheet(item: $deletionReview) { review in
             ProjectDocumentDeletionReviewView(review: review) { deletionReview = nil }
+        }
+        .sheet(isPresented: $replacingReferences) {
+            ProjectReferenceReplacementView(projectID: projectID, profileID: profileID, sourceID: documentID)
         }
         .toolbar {
             if let document {

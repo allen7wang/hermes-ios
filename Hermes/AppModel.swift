@@ -371,6 +371,45 @@ final class AppModel: ObservableObject {
         try deleteProjectDocuments(review.documents, projectID: review.projectID, profileID: review.profileID)
     }
 
+    func previewProjectReferenceReplacement(sourceID: UUID, targetID: UUID, conversationIDs: Set<UUID>,
+                                             projectID: UUID, profileID: UUID) throws -> ProjectReferenceReplacementReview {
+        try requireProjectAccess(profileID: profileID)
+        guard sourceID != targetID else { throw ProjectReferenceReplacementError.sameDocument }
+        guard !conversationIDs.isEmpty else { throw ProjectReferenceReplacementError.emptySelection }
+        guard let project = projects.first(where: { $0.id == projectID }),
+              let source = project.documents.first(where: { $0.id == sourceID }),
+              let target = project.documents.first(where: { $0.id == targetID }) else { throw ProjectDocumentError.missing }
+        let records = allConversations.filter { conversationIDs.contains($0.id) }
+        guard records.count == conversationIDs.count else { throw ProjectReferenceReplacementError.changed }
+        var rows: [ProjectReferenceReplacement.Row] = []
+        for record in records {
+            rows.append(try ProjectReferenceReplacement.makeRow(record, sourceID: sourceID, targetID: targetID, project: project, profileID: profileID))
+        }
+        rows.sort { first, second in
+            if first.status.order != second.status.order { return first.status.order < second.status.order }
+            return first.conversationID.uuidString < second.conversationID.uuidString
+        }
+        var involvedIDs: Set<UUID> = [sourceID, targetID]
+        for row in rows { involvedIDs.formUnion(row.beforeIDs); involvedIDs.formUnion(row.afterIDs) }
+        let documents = project.documents.filter { involvedIDs.contains($0.id) }.sorted { $0.id.uuidString < $1.id.uuidString }
+        return ProjectReferenceReplacementReview(profileID: profileID, projectID: projectID, projectName: project.name,
+            source: source, target: target, documents: documents, rows: rows)
+    }
+
+    func applyProjectReferenceReplacement(_ review: ProjectReferenceReplacementReview) throws {
+        let current = try previewProjectReferenceReplacement(sourceID: review.source.id, targetID: review.target.id,
+            conversationIDs: Set(review.rows.map(\.conversationID)), projectID: review.projectID, profileID: review.profileID)
+        guard current.projectName == review.projectName, current.source == review.source, current.target == review.target,
+              current.documents == review.documents, current.rows == review.rows else { throw ProjectReferenceReplacementError.changed }
+        var candidate = allConversations
+        for row in current.rows {
+            guard let index = candidate.firstIndex(where: { $0.id == row.conversationID }) else { throw ProjectReferenceReplacementError.changed }
+            candidate[index].referenceDocumentIDs = row.afterIDs
+        }
+        // All checks finish before the single atomic write. Messages and composer state stay current.
+        try commitConversations(candidate)
+    }
+
     func selectProjectDocuments(_ ids: [UUID], conversationID: UUID, profileID: UUID,
                                 expectedSelection: [UUID]? = nil, expectedProjectID: UUID? = nil) throws {
         try requireProjectAccess(profileID: profileID)
