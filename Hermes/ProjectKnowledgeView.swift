@@ -44,6 +44,7 @@ struct ProjectKnowledgeView: View {
     @State private var importRequestID: UUID?
     @State private var viewActive = false
     @State private var error: String?
+    @State private var managing = false
 
     private var project: LocalProject? {
         model.activeProfileID == profileID ? model.projects.first { $0.id == projectID } : nil
@@ -52,8 +53,7 @@ struct ProjectKnowledgeView: View {
     private var characterCount: Int { documents.reduce(0) { $0 + $1.body.count } }
     private var visible: [ProjectDocument] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return documents.filter { text.isEmpty || $0.title.localizedStandardContains(text) || $0.body.localizedStandardContains(text) }
-            .sorted { $0.updatedAt == $1.updatedAt ? $0.id.uuidString < $1.id.uuidString : $0.updatedAt > $1.updatedAt }
+        return ProjectDocumentBatch.ordered(documents.filter { text.isEmpty || $0.title.localizedStandardContains(text) || $0.body.localizedStandardContains(text) })
     }
     private var unavailable: Bool { project == nil || model.isSending || model.needsRecovery }
     private var canAdd: Bool { !unavailable && !readingFile && documents.count < ProjectDocument.collectionLimit && characterCount < ProjectDocument.projectCharacterLimit }
@@ -89,6 +89,9 @@ struct ProjectKnowledgeView: View {
                             }
                             Text("支持 UTF-8 的 .txt / .md 文件，单文件最多 256 KiB。导入后先检查编辑，再点击保存。")
                                 .font(.caption).foregroundStyle(HermesTheme.muted)
+                            Button("批量整理资料", systemImage: "checklist") { managing = true }
+                                .disabled(unavailable || documents.isEmpty || readingFile)
+                                .accessibilityIdentifier("knowledge-batch")
                             if documents.count >= ProjectDocument.collectionLimit || characterCount >= ProjectDocument.projectCharacterLimit {
                                 Text("资料库已达到数量或正文字符上限。可以编辑或删除已有资料，再添加新内容。")
                                     .font(.caption).foregroundStyle(.orange)
@@ -134,6 +137,9 @@ struct ProjectKnowledgeView: View {
             ProjectDocumentEditorView(projectID: projectID, profileID: profileID, document: target.document,
                 importedDocument: target.importedDocument, sourceFilename: target.sourceFilename) { editor = nil }
         }
+        .sheet(isPresented: $managing) {
+            ProjectDocumentBatchView(projectID: projectID, profileID: profileID)
+        }
         .fileImporter(isPresented: $importing, allowedContentTypes: importTypes, allowsMultipleSelection: false) { result in
             importFile(result)
         }
@@ -143,7 +149,7 @@ struct ProjectKnowledgeView: View {
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .onAppear { viewActive = true }
         .onDisappear {
-            if !importing && editor == nil {
+            if !importing && editor == nil && !managing {
                 viewActive = false
                 cancelImport()
             }

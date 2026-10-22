@@ -299,19 +299,49 @@ final class AppModel: ObservableObject {
 
     func deleteProjectDocument(_ id: UUID, projectID: UUID, profileID: UUID) throws {
         try requireProjectAccess(profileID: profileID)
+        guard let project = projects.first(where: { $0.id == projectID }),
+              let document = project.documents.first(where: { $0.id == id }) else { throw ProjectDocumentError.missing }
+        try deleteProjectDocuments([document], projectID: projectID, profileID: profileID)
+    }
+
+    @discardableResult
+    func copyProjectDocuments(_ documents: [ProjectDocument], fromProject sourceID: UUID,
+                              toProject targetID: UUID, profileID: UUID) throws -> [UUID] {
+        try requireProjectAccess(profileID: profileID)
+        guard sourceID != targetID else { throw ProjectDocumentBatchError.sameProject }
+        guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }),
+              let source = profiles[profileIndex].projects.first(where: { $0.id == sourceID }),
+              let targetIndex = profiles[profileIndex].projects.firstIndex(where: { $0.id == targetID }) else { throw ProjectError.missing }
+        try ProjectDocumentBatch.validate(documents, in: source)
+        var candidate = profiles
+        var projects = candidate[profileIndex].projects
+        try ProjectDocumentBatch.validateCapacity(documents, target: projects[targetIndex])
+        let now = Date()
+        let copies = documents.map { ProjectDocument(title: $0.title, body: $0.body, createdAt: now, updatedAt: now) }
+        projects[targetIndex].documents += copies
+        projects[targetIndex].updatedAt = now
+        try LocalProject.validateCollection(projects)
+        candidate[profileIndex].projects = projects
+        try commitProjectProfiles(candidate)
+        return copies.map(\.id)
+    }
+
+    func deleteProjectDocuments(_ snapshots: [ProjectDocument], projectID: UUID, profileID: UUID) throws {
+        try requireProjectAccess(profileID: profileID)
         guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }),
               let projectIndex = profiles[profileIndex].projects.firstIndex(where: { $0.id == projectID }) else { throw ProjectError.missing }
         var candidateProfiles = profiles
         var projects = candidateProfiles[profileIndex].projects
+        try ProjectDocumentBatch.validate(snapshots, in: projects[projectIndex])
+        let ids = Set(snapshots.map(\.id))
         var documents = projects[projectIndex].documents
-        guard documents.contains(where: { $0.id == id }) else { throw ProjectDocumentError.missing }
-        documents.removeAll { $0.id == id }
+        documents.removeAll { ids.contains($0.id) }
         projects[projectIndex].documents = documents
         projects[projectIndex].updatedAt = Date()
         candidateProfiles[profileIndex].projects = projects
         var candidateConversations = allConversations
         for index in candidateConversations.indices where candidateConversations[index].profileID == profileID && candidateConversations[index].projectID == projectID {
-            let references = (candidateConversations[index].referenceDocumentIDs ?? []).filter { $0 != id }
+            let references = (candidateConversations[index].referenceDocumentIDs ?? []).filter { !ids.contains($0) }
             candidateConversations[index].referenceDocumentIDs = references.isEmpty ? nil : references
         }
         try commitProjectTransaction(profiles: candidateProfiles, conversations: candidateConversations)

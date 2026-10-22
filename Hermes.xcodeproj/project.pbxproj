@@ -31,6 +31,7 @@
 		4775AAA8C056611049E433F1 /* TrashConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008C727ADE52324315685F96 /* TrashConversationView.swift */; };
 		4ADE38BC8B98214CC1CEB726 /* PromptLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237EA3E42D83726DA5400589 /* PromptLibraryView.swift */; };
 		5164C7C6649D4FC3FF6EDEDF /* RemoteModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A939A91DE145C2410DAA7DA /* RemoteModels.swift */; };
+		54F35893F50A4B92837DFA34 /* ProjectDocumentBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155236898C0432523C316F1A /* ProjectDocumentBatch.swift */; };
 		576081A2226DC42A29880EE9 /* MessageContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A741AE4C88D2E608E15F3796 /* MessageContent.swift */; };
 		5A073E3307869451184E4239 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0049E3692406A81E50FCCAD4 /* Theme.swift */; };
 		61137478BF79C59EBD2D8680 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 75147DC2838C18FE9EB3B2F7 /* MarkdownUI */; };
@@ -69,11 +70,13 @@
 		DEB8FE59F7BB4EB2272A4A51 /* ImageAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD391E83201FBC04493109 /* ImageAttachmentStore.swift */; };
 		E00EF5C7EAC07917A2FAC7AD /* MessageLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F5AFE2A428A941890BF9D6 /* MessageLibraryTests.swift */; };
 		E10728EE25B61814E98A5507 /* RemoteWorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BB7DAB23310BB37C5EBC91 /* RemoteWorkspaceModel.swift */; };
+		E817669049A47B16C50B1B9C /* ProjectDocumentBatchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844AE207E3976F14927F4230 /* ProjectDocumentBatchView.swift */; };
 		EBA113B69CE06CA9E524D3C6 /* EditMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3559963B9B7837D4AD38C56 /* EditMessageView.swift */; };
 		EC2CB907ED9EC2A11F064874 /* RemoteWorkspaceSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9789B92F9D5CC6FDB28E205 /* RemoteWorkspaceSupport.swift */; };
 		F074D451E8B169FE4E4AAF2F /* ProjectLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0AE37D0B0781AFD5E7F738 /* ProjectLibraryTests.swift */; };
 		F70F53E3233DDEE7B30A2B4B /* BackupArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB7F1C7847EFB13754E8FDC1 /* BackupArchive.swift */; };
 		F8BBD625A7FA1B05CD76A13F /* WorkbenchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 347A7441F8F06B2E74534FF0 /* WorkbenchTests.swift */; };
+		F91A723D85F053F4E2E6C49D /* ProjectDocumentBatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60AB06CDE64296F005E1A6D3 /* ProjectDocumentBatchTests.swift */; };
 		FA7A7CD5C45684DADBFFD998 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81841F748A2657370F7263E2 /* ChatModels.swift */; };
 		FCDB58E0C55BEC53B52E0621 /* Highlightr in Frameworks */ = {isa = PBXBuildFile; productRef = AFD4DA927363DC50A79F540F /* Highlightr */; };
 		FE9D0166A2D5F0C969C0A00C /* SSEParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D849C1401D58CAD2E2BBA804 /* SSEParser.swift */; };
@@ -99,6 +102,7 @@
 		0CE633AA711492BEB698843D /* AppShell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppShell.swift; sourceTree = "<group>"; };
 		12B6321212352660534CFA64 /* RemoteJobDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteJobDetailView.swift; sourceTree = "<group>"; };
 		12BB5F32E7DCE25CAB477328 /* KeychainStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		155236898C0432523C316F1A /* ProjectDocumentBatch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentBatch.swift; sourceTree = "<group>"; };
 		1A2BDB050379A7B9270405E0 /* MessageLibrary.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageLibrary.swift; sourceTree = "<group>"; };
 		1EA9EA9310926AE4991E8FDF /* BookmarkNoteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookmarkNoteView.swift; sourceTree = "<group>"; };
 		237EA3E42D83726DA5400589 /* PromptLibraryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PromptLibraryView.swift; sourceTree = "<group>"; };
@@ -117,6 +121,7 @@
 		5A32442E9B2DE079A5A238DA /* MessageContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageContentView.swift; sourceTree = "<group>"; };
 		5D54B416F25124FAC90C8A3B /* BackupTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupTests.swift; sourceTree = "<group>"; };
 		5DF1FF3D7FD619A795135EBC /* LocalProject.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalProject.swift; sourceTree = "<group>"; };
+		60AB06CDE64296F005E1A6D3 /* ProjectDocumentBatchTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentBatchTests.swift; sourceTree = "<group>"; };
 		626CB658BDCDB6DC25CB7E91 /* HermesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HermesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6408011827CABA1C59A52550 /* ConversationSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationSettingsView.swift; sourceTree = "<group>"; };
 		6408E8293B870D194A8E718D /* RemoteJobEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteJobEditorView.swift; sourceTree = "<group>"; };
@@ -126,6 +131,7 @@
 		7A939A91DE145C2410DAA7DA /* RemoteModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteModels.swift; sourceTree = "<group>"; };
 		7E8042C5F234694B2BE9843F /* KnowledgeIterationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KnowledgeIterationTests.swift; sourceTree = "<group>"; };
 		81841F748A2657370F7263E2 /* ChatModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
+		844AE207E3976F14927F4230 /* ProjectDocumentBatchView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentBatchView.swift; sourceTree = "<group>"; };
 		84864B2CB01C3F361B9F9636 /* ProjectDocumentVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentVisualTests.swift; sourceTree = "<group>"; };
 		86BCA0161E454C8198C086E0 /* MarkdownTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownTheme.swift; sourceTree = "<group>"; };
 		8A9D49F85DB79734EE9D11F4 /* ConversationDocument.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationDocument.swift; sourceTree = "<group>"; };
@@ -259,6 +265,8 @@
 				E5B4D367A5BEEA955D241B37 /* ProjectWorkspaceView.swift */,
 				DB35B84AD20CAC1903097C7D /* ProjectDocument.swift */,
 				6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */,
+				155236898C0432523C316F1A /* ProjectDocumentBatch.swift */,
+				844AE207E3976F14927F4230 /* ProjectDocumentBatchView.swift */,
 			);
 			name = Hermes;
 			path = Hermes;
@@ -293,6 +301,7 @@
 				C2043DC8C97A0CF5484A730B /* ProjectDocumentTests.swift */,
 				84864B2CB01C3F361B9F9636 /* ProjectDocumentVisualTests.swift */,
 				7E8042C5F234694B2BE9843F /* KnowledgeIterationTests.swift */,
+				60AB06CDE64296F005E1A6D3 /* ProjectDocumentBatchTests.swift */,
 			);
 			name = HermesTests;
 			path = HermesTests;
@@ -454,6 +463,8 @@
 				933FA5681A7CE170328F384D /* ProjectWorkspaceView.swift in Sources */,
 				436748448701B78C36355585 /* ProjectDocument.swift in Sources */,
 				C396C9B56B4FCFF6615495DF /* ProjectKnowledgeView.swift in Sources */,
+				54F35893F50A4B92837DFA34 /* ProjectDocumentBatch.swift in Sources */,
+				E817669049A47B16C50B1B9C /* ProjectDocumentBatchView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -479,6 +490,7 @@
 				C526745303AE1F2D287EFEB1 /* ProjectDocumentTests.swift in Sources */,
 				320A48EDF8EE6722E06CEAE3 /* ProjectDocumentVisualTests.swift in Sources */,
 				DB183D0BAF9B4E1903020479 /* KnowledgeIterationTests.swift in Sources */,
+				F91A723D85F053F4E2E6C49D /* ProjectDocumentBatchTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -525,7 +537,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1.0;
+				MARKETING_VERSION = 3.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;
@@ -623,7 +635,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1.0;
+				MARKETING_VERSION = 3.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;
