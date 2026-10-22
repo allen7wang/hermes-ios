@@ -49,6 +49,10 @@ final class AppModel: ObservableObject {
         }
     }
     var currentProject: LocalProject? { selectedConversation.flatMap { project(for: $0) } }
+    var currentReferenceDocuments: [ProjectDocument] {
+        guard !needsRecovery else { return [] }
+        return (try? ProjectDocument.selected(ids: selectedConversation?.referenceDocumentIDs ?? [], from: currentProject)) ?? []
+    }
 
     func project(for conversation: Conversation) -> LocalProject? {
         guard let projectID = conversation.projectID else { return nil }
@@ -124,9 +128,9 @@ final class AppModel: ObservableObject {
                 }
                 for conversation in allConversations {
                     try conversation.workspaceState.validate()
-                    if let projectID = conversation.projectID {
-                        guard savedProfiles.first(where: { $0.id == conversation.profileID })?.projects.contains(where: { $0.id == projectID }) == true else { throw ProjectError.missing }
-                    }
+                    let project = savedProfiles.first(where: { $0.id == conversation.profileID })?.projects.first { $0.id == conversation.projectID }
+                    if conversation.projectID != nil && project == nil { throw ProjectError.missing }
+                    _ = try ProjectDocument.selected(ids: conversation.referenceDocumentIDs ?? [], from: project)
                 }
             } catch {
                 storageLoadFailed = true
@@ -248,7 +252,7 @@ final class AppModel: ObservableObject {
         guard existing != nil || projects.count < LocalProject.collectionLimit else { throw ProjectError.limit }
         let now = Date()
         let project = try LocalProject(id: existing?.id ?? UUID(), name: name, summary: summary, instructions: instructions,
-            createdAt: existing?.createdAt ?? now, updatedAt: now).validated()
+            createdAt: existing?.createdAt ?? now, updatedAt: now, knowledgeDocuments: existing?.knowledgeDocuments).validated()
         if let index = projects.firstIndex(where: { $0.id == project.id }) { projects[index] = project }
         else { projects.append(project) }
         try LocalProject.validateCollection(projects)
@@ -261,18 +265,76 @@ final class AppModel: ObservableObject {
         return project.id
     }
 
-    func deleteProject(_ id: UUID, profileID: UUID) throws {
+    @discardableResult
+    func saveProjectDocument(id: UUID?, projectID: UUID, title: String, body: String, profileID: UUID) throws -> UUID {
         try requireProjectAccess(profileID: profileID)
         guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }),
-              profiles[profileIndex].projects.contains(where: { $0.id == id }) else { throw ProjectError.missing }
+              let projectIndex = profiles[profileIndex].projects.firstIndex(where: { $0.id == projectID }) else { throw ProjectError.missing }
+        var candidate = profiles
+        var projects = candidate[profileIndex].projects
+        var project = projects[projectIndex]
+        var documents = project.documents
+        let existing = id.flatMap { id in documents.first { $0.id == id } }
+        if id != nil && existing == nil { throw ProjectDocumentError.missing }
+        let now = Date()
+        let document = try ProjectDocument(id: existing?.id ?? UUID(), title: title, body: body,
+            createdAt: existing?.createdAt ?? now, updatedAt: now).validated()
+        if let index = documents.firstIndex(where: { $0.id == document.id }) { documents[index] = document }
+        else { documents.append(document) }
+        try ProjectDocument.validateCollection(documents)
+        project.documents = documents
+        project.updatedAt = now
+        // An edited document must not invalidate a saved conversation, including one in the trash.
+        for conversation in allConversations where conversation.profileID == profileID && conversation.projectID == projectID {
+            do { _ = try ProjectDocument.selected(ids: conversation.referenceDocumentIDs ?? [], from: project) }
+            catch ProjectDocumentError.selectionTooLarge { throw ProjectDocumentError.referencedSelectionTooLarge }
+        }
+        projects[projectIndex] = project
+        candidate[profileIndex].projects = projects
+        try commitProjectProfiles(candidate)
+        return document.id
+    }
+
+    func deleteProjectDocument(_ id: UUID, projectID: UUID, profileID: UUID) throws {
+        try requireProjectAccess(profileID: profileID)
+        guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }),
+              let projectIndex = profiles[profileIndex].projects.firstIndex(where: { $0.id == projectID }) else { throw ProjectError.missing }
         var candidateProfiles = profiles
         var projects = candidateProfiles[profileIndex].projects
-        projects.removeAll { $0.id == id }
+        var documents = projects[projectIndex].documents
+        guard documents.contains(where: { $0.id == id }) else { throw ProjectDocumentError.missing }
+        documents.removeAll { $0.id == id }
+        projects[projectIndex].documents = documents
+        projects[projectIndex].updatedAt = Date()
         candidateProfiles[profileIndex].projects = projects
         var candidateConversations = allConversations
-        for index in candidateConversations.indices where candidateConversations[index].profileID == profileID && candidateConversations[index].projectID == id {
-            candidateConversations[index].projectID = nil
+        for index in candidateConversations.indices where candidateConversations[index].profileID == profileID && candidateConversations[index].projectID == projectID {
+            let references = (candidateConversations[index].referenceDocumentIDs ?? []).filter { $0 != id }
+            candidateConversations[index].referenceDocumentIDs = references.isEmpty ? nil : references
         }
+        try commitProjectTransaction(profiles: candidateProfiles, conversations: candidateConversations)
+    }
+
+    func selectProjectDocuments(_ ids: [UUID], conversationID: UUID, profileID: UUID) throws {
+        try requireProjectAccess(profileID: profileID)
+        try requireWorkspaceAccess([conversationID])
+        guard let index = allConversations.firstIndex(where: { $0.id == conversationID && $0.profileID == profileID }),
+              let project = project(for: allConversations[index]) else { throw ProjectError.missing }
+        _ = try ProjectDocument.selected(ids: ids, from: project)
+        var candidate = allConversations
+        candidate[index].referenceDocumentIDs = ids.isEmpty ? nil : ids
+        try commitConversations(candidate)
+    }
+
+    private func commitProjectProfiles(_ candidate: [ConnectionProfile]) throws {
+        let library = ConnectionLibrary(profiles: candidate, activeID: activeProfileID, selectedConversations: selectedConversations)
+        let data = try JSONEncoder().encode(library)
+        try data.write(to: directory.appendingPathComponent("connections.json"), options: .atomic)
+        defaults.set(data, forKey: "connectionLibrary")
+        profiles = candidate
+    }
+
+    private func commitProjectTransaction(profiles candidateProfiles: [ConnectionProfile], conversations candidateConversations: [Conversation]) throws {
         let library = ConnectionLibrary(profiles: candidateProfiles, activeID: activeProfileID, selectedConversations: selectedConversations)
         let state = BackupRestoreState(library: library, conversations: candidateConversations, drafts: try draftStore.snapshot(), images: [:])
         do {
@@ -288,12 +350,31 @@ final class AppModel: ObservableObject {
         refreshConversations()
     }
 
+    func deleteProject(_ id: UUID, profileID: UUID) throws {
+        try requireProjectAccess(profileID: profileID)
+        guard let profileIndex = profiles.firstIndex(where: { $0.id == profileID }),
+              profiles[profileIndex].projects.contains(where: { $0.id == id }) else { throw ProjectError.missing }
+        var candidateProfiles = profiles
+        var projects = candidateProfiles[profileIndex].projects
+        projects.removeAll { $0.id == id }
+        candidateProfiles[profileIndex].projects = projects
+        var candidateConversations = allConversations
+        for index in candidateConversations.indices where candidateConversations[index].profileID == profileID && candidateConversations[index].projectID == id {
+            candidateConversations[index].projectID = nil
+            candidateConversations[index].referenceDocumentIDs = nil
+        }
+        try commitProjectTransaction(profiles: candidateProfiles, conversations: candidateConversations)
+    }
+
     func assignConversations(_ ids: Set<UUID>, toProject projectID: UUID?, profileID: UUID) throws {
         try requireProjectAccess(profileID: profileID)
         try requireWorkspaceAccess(ids)
         if let projectID, !projects.contains(where: { $0.id == projectID }) { throw ProjectError.missing }
         var candidate = allConversations
-        for index in candidate.indices where ids.contains(candidate[index].id) { candidate[index].projectID = projectID }
+        for index in candidate.indices where ids.contains(candidate[index].id) {
+            if candidate[index].projectID != projectID { candidate[index].referenceDocumentIDs = nil }
+            candidate[index].projectID = projectID
+        }
         try commitConversations(candidate)
     }
 
@@ -441,11 +522,13 @@ final class AppModel: ObservableObject {
             candidate[index].title = title
             candidate[index].workspace = workspace.isDefault ? nil : workspace
             // nil and .all preserve membership; .unassigned explicitly removes it.
+            let previousProjectID = candidate[index].projectID
             switch project {
             case .project(let id): candidate[index].projectID = id
             case .unassigned: candidate[index].projectID = nil
             case .all, nil: break
             }
+            if candidate[index].projectID != previousProjectID { candidate[index].referenceDocumentIDs = nil }
             try commitConversations(candidate)
         } else {
             guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { throw WorkspaceError.changedContext }
@@ -667,7 +750,8 @@ final class AppModel: ObservableObject {
         let input = ChatMessage(role: .user, content: text, imageID: hasImage ? UUID() : nil)
         return ChatContextPreview(profileID: activeProfileID, draftKey: draftKey, profileName: activeProfileName,
             fallbackModel: settings.model, rawText: rawText, inputID: input.id, sourceIDs: source.map(\.id),
-            plan: try PreparedChatContext(messages: source + [input], configuration: conversationConfiguration, project: currentProject))
+            plan: try PreparedChatContext(messages: source + [input], configuration: conversationConfiguration, project: currentProject,
+                referenceDocumentIDs: selectedConversation?.referenceDocumentIDs ?? []))
     }
 
     func retryLastResponse() {
@@ -710,6 +794,10 @@ final class AppModel: ObservableObject {
         }
         var messages = Array(source.messages[..<index])
         messages.append(ChatMessage(role: .user, content: text, imageID: imageID))
+        do {
+            _ = try PreparedChatContext(messages: messages, configuration: source.workspaceState.configuration,
+                project: project(for: source), referenceDocumentIDs: source.referenceDocumentIDs ?? [])
+        } catch { errorMessage = error.localizedDescription; return false }
         guard let id = saveBranch(of: source, messages: messages) else { return false }
         requestResponse(for: id)
         return true
@@ -725,7 +813,7 @@ final class AppModel: ObservableObject {
         workspace.trashedAt = nil
         let branch = Conversation(title: String(source.title.prefix(75)) + " · 分支",
                                   messages: copies, updatedAt: Date(), profileID: activeProfileID,
-                                  workspace: workspace.isDefault ? nil : workspace, projectID: source.projectID)
+                                  workspace: workspace.isDefault ? nil : workspace, projectID: source.projectID, referenceDocumentIDs: source.referenceDocumentIDs)
         let candidate = [branch] + allConversations
         do {
             try JSONEncoder().encode(candidate).write(to: conversationsURL, options: .atomic)
@@ -756,6 +844,15 @@ final class AppModel: ObservableObject {
         }
         guard settings.isConfigured else {
             errorMessage = "请先在连接管理中填写 Hermes 服务地址和 API 密钥。"
+            return false
+        }
+
+        do {
+            _ = try PreparedChatContext(messages: (selectedConversation?.messages ?? []) + [ChatMessage(role: .user, content: text)],
+                configuration: conversationConfiguration, project: currentProject,
+                referenceDocumentIDs: selectedConversation?.referenceDocumentIDs ?? [])
+        } catch {
+            errorMessage = error.localizedDescription
             return false
         }
 
@@ -825,7 +922,7 @@ final class AppModel: ObservableObject {
             }
             do {
                 let reply = try await HermesClient(settings: connection, sessionConfiguration: sessionConfiguration, attachmentDirectory: attachmentDirectory).stream(
-                    messages: history, configuration: configuration, project: project
+                    messages: history, configuration: configuration, project: project, referenceDocumentIDs: conversation.referenceDocumentIDs ?? []
                 ) { event in
                     await MainActor.run {
                         switch event {

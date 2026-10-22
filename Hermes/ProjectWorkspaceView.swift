@@ -36,7 +36,7 @@ struct ProjectWorkspaceView: View {
                             .font(.caption.weight(.semibold)).tracking(2).foregroundStyle(HermesTheme.accent)
                         Text("为长期的事，留一个工作区。")
                             .font(.title2.bold())
-                        Text("把相关对话和共同指令放在一起。项目仅保存在本机，属于当前连接。")
+                        Text("把相关对话、共同指令和参考资料放在一起。项目仅保存在本机，属于当前连接。")
                             .font(.subheadline).foregroundStyle(HermesTheme.muted)
                         HStack(spacing: 12) {
                             projectMetric("项目", count: model.projects.count)
@@ -117,6 +117,7 @@ private struct ProjectCard: View {
             HStack(spacing: 12) {
                 Text("\(activeCount) 段进行中")
                 Text("\(archivedCount) 段已归档")
+                Text("\(project.documents.count) 篇资料")
                 if !project.instructions.isEmpty { Image(systemName: "text.alignleft").accessibilityLabel("已设置项目指令") }
             }.font(.caption).foregroundStyle(HermesTheme.accent)
         }.padding(.vertical, 8)
@@ -167,6 +168,20 @@ struct ProjectDetailView: View {
                         }.padding(.vertical, 8)
                     }.listRowBackground(Color.clear)
                     Section {
+                        NavigationLink {
+                            ProjectKnowledgeView(projectID: projectID, profileID: profileID)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 9) {
+                                Label("项目资料库", systemImage: "books.vertical.fill")
+                                    .font(.headline).foregroundStyle(HermesTheme.accent)
+                                Text("\(project.documents.count) 篇资料 · \(project.documents.reduce(0) { $0 + $1.body.count }.formatted()) 个正文字符")
+                                    .font(.subheadline).foregroundStyle(.white)
+                                Text("新建或导入文本，再在对话里选择需要的参考资料。仅选中内容随请求发送。")
+                                    .font(.caption).foregroundStyle(HermesTheme.muted)
+                            }.padding(.vertical, 6)
+                        }.accessibilityIdentifier("project-knowledge-library")
+                    }.listRowBackground(HermesTheme.surface)
+                    Section {
                         if project.instructions.isEmpty {
                             Label("尚未设置项目指令", systemImage: "text.alignleft").foregroundStyle(HermesTheme.muted)
                             Button("添加项目指令") { showingEditor = true }.disabled(unavailable)
@@ -201,7 +216,7 @@ struct ProjectDetailView: View {
                         Button("解散项目", systemImage: "folder.badge.minus", role: .destructive) { confirmingDissolution = true }
                             .disabled(unavailable).accessibilityIdentifier("project-dissolve")
                     } footer: {
-                        Text("Markdown 仅包含进行中和已归档的对话、标签及图片占位提示，不包含项目简介、项目指令或回收站。迁移附件请使用 JSON 备份。")
+                        Text("Markdown 仅包含进行中和已归档的对话、标签及图片占位提示，不包含项目简介、项目指令、资料正文或回收站。迁移完整项目与附件请使用 JSON 备份。")
                     }.listRowBackground(HermesTheme.surface)
                 }
                 .listStyle(.insetGrouped).scrollContentBackground(.hidden).background(HermesTheme.background)
@@ -215,7 +230,7 @@ struct ProjectDetailView: View {
                     }
                     Button("取消", role: .cancel) {}
                 } message: {
-                    Text("进行中、已归档和回收站中的对话都会改为未分配；消息、收藏、图片及每段对话的草稿会保留。项目简介与共同指令将删除。")
+                    Text("进行中、已归档和回收站中的对话都会改为未分配，资料引用会解除。项目简介、共同指令和资料库将删除；聊天消息、收藏、图片及每段对话的草稿会保留。")
                 }
             } else {
                 ContentUnavailableView("项目已改变", systemImage: "folder.badge.questionmark", description: Text("项目可能已解散，或当前连接已切换。请返回项目列表。"))

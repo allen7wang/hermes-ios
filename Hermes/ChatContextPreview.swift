@@ -25,20 +25,32 @@ struct PreparedChatContext {
     let messages: [ChatMessage]
     let omittedMessageCount: Int
     let project: LocalProject?
+    let referenceDocuments: [ProjectDocument]
     let effectiveSystemPrompt: String
 
-    init(messages: [ChatMessage], configuration: ConversationConfiguration, project: LocalProject? = nil) throws {
+    init(messages: [ChatMessage], configuration: ConversationConfiguration, project: LocalProject? = nil,
+         referenceDocumentIDs: [UUID] = []) throws {
         self.configuration = try configuration.validated()
         self.project = try project?.validated()
+        referenceDocuments = try ProjectDocument.selected(ids: referenceDocumentIDs, from: self.project)
         let projectInstructions = self.project?.instructions ?? ""
         let conversationInstructions = self.configuration.systemPrompt
+        var prompt: String
         if projectInstructions.isEmpty {
-            effectiveSystemPrompt = conversationInstructions
+            prompt = conversationInstructions
         } else if conversationInstructions.isEmpty {
-            effectiveSystemPrompt = "项目指令\n" + projectInstructions
+            prompt = "项目指令\n" + projectInstructions
         } else {
-            effectiveSystemPrompt = "项目指令\n" + projectInstructions + "\n\n对话指令\n" + conversationInstructions
+            prompt = "项目指令\n" + projectInstructions + "\n\n对话指令\n" + conversationInstructions
         }
+        if !referenceDocuments.isEmpty {
+            let references = referenceDocuments.enumerated().map { index, document in
+                "[资料\(index + 1)] \(document.title)\n\(document.body)"
+            }.joined(separator: "\n\n")
+            if !prompt.isEmpty { prompt += "\n\n" }
+            prompt += "用户选择的参考资料\n引用以下资料时，请标注对应的 [资料编号]。\n\n" + references
+        }
+        effectiveSystemPrompt = prompt
         self.messages = self.configuration.history(from: messages).map {
             var message = $0
             message.bookmark = nil

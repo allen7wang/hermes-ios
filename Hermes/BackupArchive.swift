@@ -16,8 +16,10 @@ struct BackupArchive: Codable {
     var bookmarkCount: Int { conversations.reduce(0) { $0 + $1.messages.filter { $0.bookmark != nil }.count } }
     var templateCount: Int { profiles.reduce(0) { $0 + $1.templates.count } }
     var projectCount: Int { profiles.reduce(0) { $0 + $1.projects.count } }
+    var documentCount: Int { profiles.reduce(0) { $0 + $1.projects.reduce(0) { $0 + $1.documents.count } } }
     var trashCount: Int { conversations.filter(\.isTrashed).count }
     var minimumVersion: Int {
+        if documentCount > 0 || conversations.contains(where: { !($0.referenceDocumentIDs ?? []).isEmpty }) { return 7 }
         if projectCount > 0 || conversations.contains(where: { $0.projectID != nil }) { return 6 }
         if trashCount > 0 { return 5 }
         if profiles.contains(where: { $0.conversationDefaults != nil }) || conversations.contains(where: { $0.workspace != nil }) { return 4 }
@@ -51,7 +53,7 @@ struct BackupArchive: Codable {
 
     func validate() throws {
         guard format == "hermes-ios-backup" else { throw BackupError.invalidFile }
-        guard (1...6).contains(version) else { throw BackupError.unsupportedVersion }
+        guard (1...7).contains(version) else { throw BackupError.unsupportedVersion }
         guard version >= minimumVersion else { throw BackupError.invalidFile }
         guard !profiles.isEmpty, profiles.count <= 100,
               conversations.count <= 5_000,
@@ -80,6 +82,9 @@ struct BackupArchive: Codable {
             if let projectID = conversation.projectID {
                 guard profiles.first(where: { $0.id == profileID })?.projects.contains(where: { $0.id == projectID }) == true else { throw BackupError.invalidFile }
             }
+            let project = profiles.first(where: { $0.id == profileID })?.projects.first { $0.id == conversation.projectID }
+            do { _ = try ProjectDocument.selected(ids: conversation.referenceDocumentIDs ?? [], from: project) }
+            catch { throw BackupError.invalidFile }
             conversationProfiles[conversation.id] = profileID
             referencedImages.formUnion(conversation.messages.compactMap { $0.imageID?.uuidString })
             for message in conversation.messages {
@@ -120,9 +125,10 @@ struct BackupImportReport {
     let imagesAdded: Int
     let templatesAdded: Int
     let projectsAdded: Int
+    var documentsAdded: Int = 0
 
     var description: String {
-        "新增 \(profilesAdded) 个连接、\(conversationsAdded) 段对话、\(draftsAdded) 份草稿、\(imagesAdded) 张图片、\(templatesAdded) 个提示词模板和 \(projectsAdded) 个项目；保留 \(conversationsKept) 段已有对话。"
+        "新增 \(profilesAdded) 个连接、\(conversationsAdded) 段对话、\(draftsAdded) 份草稿、\(imagesAdded) 张图片、\(templatesAdded) 个提示词模板、\(projectsAdded) 个项目和 \(documentsAdded) 份资料；保留 \(conversationsKept) 段已有对话。"
     }
 }
 
@@ -140,9 +146,11 @@ struct BackupMerge {
         var profileMap: [UUID: UUID] = [:]
         var conversationMap: [UUID: UUID] = [:]
         var projectMap: [UUID: [UUID: UUID]] = [:]
+        var documentMap: [UUID: [UUID: [UUID: UUID]]] = [:]
         var kept = 0
         var templatesAdded = 0
         var projectsAdded = 0
+        var documentsAdded = 0
         for profile in archive.profiles {
             let endpoint = try identity(profile)
             // Only the same installation can match an original ID. Fresh imports receive stable IDs.
@@ -176,11 +184,31 @@ struct BackupMerge {
             for project in profile.projects {
                 let projectID = original != nil ? project.id : stableID([archive.installationID.uuidString, project.id.uuidString, target.uuidString, "project"])
                 projectMap[profile.id, default: [:]][project.id] = projectID
-                if projects.contains(where: { $0.id == projectID }) { continue }
-                var imported = project
-                imported.id = projectID
-                projects.append(imported)
-                projectsAdded += 1
+                let projectIndex: Int
+                if let existing = projects.firstIndex(where: { $0.id == projectID }) {
+                    projectIndex = existing
+                } else {
+                    var imported = project
+                    imported.id = projectID
+                    imported.documents = []
+                    projects.append(imported)
+                    projectIndex = projects.count - 1
+                    projectsAdded += 1
+                }
+                var documents = projects[projectIndex].documents
+                for document in project.documents {
+                    let documentID = original != nil ? document.id : stableID([archive.installationID.uuidString,
+                        profile.id.uuidString, project.id.uuidString, document.id.uuidString,
+                        target.uuidString, projectID.uuidString, "project-document"])
+                    documentMap[profile.id, default: [:]][project.id, default: [:]][document.id] = documentID
+                    if documents.contains(where: { $0.id == documentID }) { continue }
+                    var imported = document
+                    imported.id = documentID
+                    documents.append(imported)
+                    documentsAdded += 1
+                }
+                try ProjectDocument.validateCollection(documents)
+                projects[projectIndex].documents = documents
             }
             try LocalProject.validateCollection(projects)
             profiles[index].projects = projects
@@ -197,6 +225,11 @@ struct BackupMerge {
             if let projectID = conversation.projectID {
                 guard let targetProject = projectMap[sourceProfile]?[projectID] else { throw BackupError.invalidFile }
                 imported.projectID = targetProject
+                let references = try (conversation.referenceDocumentIDs ?? []).map { id in
+                    guard let targetDocument = documentMap[sourceProfile]?[projectID]?[id] else { throw BackupError.invalidFile }
+                    return targetDocument
+                }
+                imported.referenceDocumentIDs = references.isEmpty ? nil : references
             }
             for index in imported.messages.indices {
                 guard let imageID = imported.messages[index].imageID,
@@ -219,13 +252,19 @@ struct BackupMerge {
             let targetKey = "\(targetProfile.uuidString)/\(parts[1])/\(suffix)"
             if texts[targetKey]?.isEmpty != false { texts[targetKey] = value; draftsAdded += 1 }
         }
+        // Local document edits take precedence. Validate newly mapped references against those
+        // actual documents, rather than assuming the archive's original lengths still apply.
+        for conversation in records {
+            let project = profiles.first(where: { $0.id == conversation.profileID })?.projects.first { $0.id == conversation.projectID }
+            _ = try ProjectDocument.selected(ids: conversation.referenceDocumentIDs ?? [], from: project)
+        }
         let mergedLibrary = ConnectionLibrary(profiles: profiles, activeID: library.activeID,
                                               selectedConversations: library.selectedConversations)
         return BackupMerge(state: BackupRestoreState(library: mergedLibrary, conversations: records, drafts: texts, images: images),
                            report: BackupImportReport(profilesAdded: profiles.count - library.profiles.count,
                                                       conversationsAdded: records.count - conversations.count,
                                                       conversationsKept: kept, draftsAdded: draftsAdded, imagesAdded: images.count,
-                                                      templatesAdded: templatesAdded, projectsAdded: projectsAdded))
+                                                      templatesAdded: templatesAdded, projectsAdded: projectsAdded, documentsAdded: documentsAdded))
     }
 
     private static func identity(_ profile: ConnectionProfile) throws -> String {

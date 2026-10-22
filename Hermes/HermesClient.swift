@@ -240,9 +240,11 @@ struct HermesClient {
         messages: [ChatMessage],
         configuration: ConversationConfiguration = ConversationConfiguration(),
         project: LocalProject? = nil,
+        referenceDocumentIDs: [UUID] = [],
         onEvent: (ChatStreamEvent) async -> Void
     ) async throws -> String {
-        let plan = try PreparedChatContext(messages: messages, configuration: configuration, project: project)
+        let plan = try PreparedChatContext(messages: messages, configuration: configuration, project: project,
+                                          referenceDocumentIDs: referenceDocumentIDs)
         let options = plan.configuration
         var context = try plan.messages.map { try CompletionMessage($0, directory: attachmentDirectory) }
         if !plan.effectiveSystemPrompt.isEmpty { context.insert(CompletionMessage(systemPrompt: plan.effectiveSystemPrompt), at: 0) }

@@ -11,6 +11,7 @@ struct ChatContextPreviewView: View {
         preview.profileID != model.activeProfileID || preview.draftKey != model.draftKey ||
         preview.rawText != model.draft || preview.plan.configuration != model.conversationConfiguration ||
         preview.plan.project != model.currentProject ||
+        preview.plan.referenceDocuments.map(\.id) != (model.selectedConversation?.referenceDocumentIDs ?? []) ||
         preview.fallbackModel != model.settings.model ||
         preview.sourceIDs != (model.selectedConversation?.messages ?? []).map(\.id)
     }
@@ -33,6 +34,7 @@ struct ChatContextPreviewView: View {
                     LabeledContent("历史消息", value: "\(preview.historyCount) 条")
                     LabeledContent("未带入", value: "\(preview.plan.omittedMessageCount) 条")
                     LabeledContent("图片", value: "\(preview.imageCount) 张")
+                    LabeledContent("参考资料", value: "\(preview.plan.referenceDocuments.count) 份 · \(preview.plan.referenceDocuments.reduce(0) { $0 + $1.body.count }) 字符")
                     Text("这里只预览内容。返回后手动发送，届时以当前草稿和设置为准；实际模型仍由服务端路由决定。")
                         .font(.caption).foregroundStyle(HermesTheme.muted)
                 }.listRowBackground(HermesTheme.surface)
@@ -48,9 +50,25 @@ struct ChatContextPreviewView: View {
                             Text(preview.plan.effectiveSystemPrompt).font(.subheadline).textSelection(.enabled)
                         }
                         if preview.plan.project?.instructions.isEmpty == false {
-                            Text("先带入项目指令，再带入这段对话的额外指令。项目说明和其他对话不会自动带入。")
+                            Text("先带入项目指令、对话指令，再附上明确选中的参考资料。项目简介和其他对话不会自动带入。")
                                 .font(.caption).foregroundStyle(HermesTheme.muted)
                         }
+                    }.listRowBackground(HermesTheme.surface)
+                }
+                if !preview.plan.referenceDocuments.isEmpty {
+                    Section("本次参考资料 · 按选择顺序") {
+                        ForEach(Array(preview.plan.referenceDocuments.enumerated()), id: \.element.id) { index, document in
+                            DisclosureGroup {
+                                Text(document.body).font(.subheadline).textSelection(.enabled)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("[资料\(index + 1)] \(document.title)").font(.subheadline.weight(.semibold))
+                                    Text("\(document.body.count) 字符 · 全文带入").font(.caption).foregroundStyle(HermesTheme.muted)
+                                }
+                            }
+                        }
+                        Text("仅带入以上资料全文，不会自动检索其他资料。内容上限按字符计算，不代表模型的令牌容量；引用标注由模型生成。")
+                            .font(.caption).foregroundStyle(HermesTheme.muted)
                     }.listRowBackground(HermesTheme.surface)
                 }
                 Section("实际携带的消息 · 按发送顺序") {

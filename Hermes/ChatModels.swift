@@ -38,6 +38,7 @@ struct Conversation: Identifiable, Codable, Equatable {
     var pinned: Bool?
     var workspace: ConversationWorkspace?
     var projectID: UUID?
+    var referenceDocumentIDs: [UUID]?
 
     var isPinned: Bool { pinned == true }
     var workspaceState: ConversationWorkspace { workspace ?? ConversationWorkspace() }

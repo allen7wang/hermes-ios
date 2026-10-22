@@ -12,6 +12,12 @@ struct LocalProject: Identifiable, Codable, Equatable {
     var instructions: String
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+    var knowledgeDocuments: [ProjectDocument]?
+
+    var documents: [ProjectDocument] {
+        get { knowledgeDocuments ?? [] }
+        set { knowledgeDocuments = newValue.isEmpty ? nil : newValue }
+    }
 
     func validated() throws -> Self {
         var value = self
@@ -24,6 +30,7 @@ struct LocalProject: Identifiable, Codable, Equatable {
               value.instructions.count <= Self.instructionsLimit,
               createdAt.timeIntervalSince1970.isFinite,
               updatedAt.timeIntervalSince1970.isFinite else { throw ProjectError.invalid }
+        try ProjectDocument.validateCollection(value.documents)
         return value
     }
 

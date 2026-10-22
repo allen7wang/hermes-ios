@@ -21,10 +21,12 @@
 		28E726BD923B776183825C47 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C4C8104D97FE45A491B33B /* AppModel.swift */; };
 		2FAA70EA5F84179221742BC8 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C28409E01CF3C9A582AF3ADF /* Foundation.framework */; };
 		2FC7B7CD4503C7A80E0D89A8 /* MessageLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2BDB050379A7B9270405E0 /* MessageLibrary.swift */; };
+		320A48EDF8EE6722E06CEAE3 /* ProjectDocumentVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84864B2CB01C3F361B9F9636 /* ProjectDocumentVisualTests.swift */; };
 		3346F6241C50C7DAB838D4C2 /* ChatTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50454D58F18B2420F79E7436 /* ChatTimeline.swift */; };
 		35E40C189B7DAD19615D9007 /* HermesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01440E4DB1FAFBF6B192E691 /* HermesClient.swift */; };
 		37E06642754314784243D2EF /* DraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3DDB0149B8B7C3DE5C1542 /* DraftStore.swift */; };
 		38AF0667049395E84565DF09 /* WorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A6E570BFEAA95C3FDA6D21 /* WorkspaceTests.swift */; };
+		436748448701B78C36355585 /* ProjectDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB35B84AD20CAC1903097C7D /* ProjectDocument.swift */; };
 		4563C89BC5440627850E2288 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C97823D7AC1233635B5524D9 /* ChatView.swift */; };
 		4775AAA8C056611049E433F1 /* TrashConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 008C727ADE52324315685F96 /* TrashConversationView.swift */; };
 		4ADE38BC8B98214CC1CEB726 /* PromptLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237EA3E42D83726DA5400589 /* PromptLibraryView.swift */; };
@@ -52,6 +54,8 @@
 		B1F2D39E8B4BE0A8AA2B05A8 /* RemoteWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD1452738C1904CD8499DFBF /* RemoteWorkspaceView.swift */; };
 		B3408444877B6CF0D5D8CA51 /* ChatContextPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE113579187D47BC66B26A88 /* ChatContextPreviewView.swift */; };
 		B5FCB2E81C1C0EF1AA4609AB /* BackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D54B416F25124FAC90C8A3B /* BackupTests.swift */; };
+		C396C9B56B4FCFF6615495DF /* ProjectKnowledgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */; };
+		C526745303AE1F2D287EFEB1 /* ProjectDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2043DC8C97A0CF5484A730B /* ProjectDocumentTests.swift */; };
 		C60830660BDBD1E63354C8FF /* LocalProject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DF1FF3D7FD619A795135EBC /* LocalProject.swift */; };
 		C915847C31AFD384D21A2E24 /* ConversationBranchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7CAFF5D46C759AC52DEBF1A /* ConversationBranchTests.swift */; };
 		CCB4882E42B9CE3B2C799D06 /* PromptTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2AC6113348C69D16B95376 /* PromptTemplate.swift */; };
@@ -116,9 +120,11 @@
 		6408011827CABA1C59A52550 /* ConversationSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationSettingsView.swift; sourceTree = "<group>"; };
 		6408E8293B870D194A8E718D /* RemoteJobEditorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteJobEditorView.swift; sourceTree = "<group>"; };
 		6D0C51F4AE0B859BEC48115E /* MessageSearchView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageSearchView.swift; sourceTree = "<group>"; };
+		6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectKnowledgeView.swift; sourceTree = "<group>"; };
 		7A3DDB0149B8B7C3DE5C1542 /* DraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DraftStore.swift; sourceTree = "<group>"; };
 		7A939A91DE145C2410DAA7DA /* RemoteModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteModels.swift; sourceTree = "<group>"; };
 		81841F748A2657370F7263E2 /* ChatModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
+		84864B2CB01C3F361B9F9636 /* ProjectDocumentVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentVisualTests.swift; sourceTree = "<group>"; };
 		86BCA0161E454C8198C086E0 /* MarkdownTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownTheme.swift; sourceTree = "<group>"; };
 		8A9D49F85DB79734EE9D11F4 /* ConversationDocument.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationDocument.swift; sourceTree = "<group>"; };
 		8DCB590C536F8AD4BBA39E96 /* ProjectWorkspaceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectWorkspaceTests.swift; sourceTree = "<group>"; };
@@ -135,6 +141,7 @@
 		BAC952520B8E67B4038064FB /* BackupView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		BC847C5D0869EF644B706EE4 /* ConnectionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConnectionTests.swift; sourceTree = "<group>"; };
 		C0722B05FB0448A9032EFBDA /* RemoteSessionDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteSessionDetailView.swift; sourceTree = "<group>"; };
+		C2043DC8C97A0CF5484A730B /* ProjectDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentTests.swift; sourceTree = "<group>"; };
 		C28409E01CF3C9A582AF3ADF /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		C821943A1E303812C17EEBB8 /* MessageContentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageContentTests.swift; sourceTree = "<group>"; };
 		C97823D7AC1233635B5524D9 /* ChatView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
@@ -144,6 +151,7 @@
 		D5BB7DAB23310BB37C5EBC91 /* RemoteWorkspaceModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteWorkspaceModel.swift; sourceTree = "<group>"; };
 		D7CAFF5D46C759AC52DEBF1A /* ConversationBranchTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationBranchTests.swift; sourceTree = "<group>"; };
 		D849C1401D58CAD2E2BBA804 /* SSEParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SSEParser.swift; sourceTree = "<group>"; };
+		DB35B84AD20CAC1903097C7D /* ProjectDocument.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocument.swift; sourceTree = "<group>"; };
 		DC4CFD5BA3BED7770588BF6A /* HermesApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HermesApp.swift; sourceTree = "<group>"; };
 		DE113579187D47BC66B26A88 /* ChatContextPreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatContextPreviewView.swift; sourceTree = "<group>"; };
 		DF3D49FDC03D59DB268EF9FD /* Hermes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hermes.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -247,6 +255,8 @@
 				008C727ADE52324315685F96 /* TrashConversationView.swift */,
 				5DF1FF3D7FD619A795135EBC /* LocalProject.swift */,
 				E5B4D367A5BEEA955D241B37 /* ProjectWorkspaceView.swift */,
+				DB35B84AD20CAC1903097C7D /* ProjectDocument.swift */,
+				6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */,
 			);
 			name = Hermes;
 			path = Hermes;
@@ -278,6 +288,8 @@
 				2B0AE37D0B0781AFD5E7F738 /* ProjectLibraryTests.swift */,
 				065FF438865EA88631FD1171 /* ProjectVisualTests.swift */,
 				8DCB590C536F8AD4BBA39E96 /* ProjectWorkspaceTests.swift */,
+				C2043DC8C97A0CF5484A730B /* ProjectDocumentTests.swift */,
+				84864B2CB01C3F361B9F9636 /* ProjectDocumentVisualTests.swift */,
 			);
 			name = HermesTests;
 			path = HermesTests;
@@ -437,6 +449,8 @@
 				4775AAA8C056611049E433F1 /* TrashConversationView.swift in Sources */,
 				C60830660BDBD1E63354C8FF /* LocalProject.swift in Sources */,
 				933FA5681A7CE170328F384D /* ProjectWorkspaceView.swift in Sources */,
+				436748448701B78C36355585 /* ProjectDocument.swift in Sources */,
+				C396C9B56B4FCFF6615495DF /* ProjectKnowledgeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -459,6 +473,8 @@
 				F074D451E8B169FE4E4AAF2F /* ProjectLibraryTests.swift in Sources */,
 				040CD618F265C72AA2042D17 /* ProjectVisualTests.swift in Sources */,
 				16296F8CB21C4B2033B39D36 /* ProjectWorkspaceTests.swift in Sources */,
+				C526745303AE1F2D287EFEB1 /* ProjectDocumentTests.swift in Sources */,
+				320A48EDF8EE6722E06CEAE3 /* ProjectDocumentVisualTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -505,7 +521,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 3.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;
@@ -603,7 +619,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 3.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;

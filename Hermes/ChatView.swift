@@ -9,6 +9,12 @@ private struct PromptComposerContext: Identifiable {
     let title: String
 }
 
+private struct ProjectReferenceSelectionTarget: Identifiable {
+    let id = UUID()
+    let conversationID: UUID
+    let profileID: UUID
+}
+
 struct ChatView: View {
     var initialTarget: LocalMessageTarget? = nil
     @EnvironmentObject private var model: AppModel
@@ -33,6 +39,7 @@ struct ChatView: View {
     @State private var exporting = false
     @State private var contextPreview: ChatContextPreview?
     @State private var showingProjects = false
+    @State private var referenceSelection: ProjectReferenceSelectionTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -114,6 +121,9 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showingProjects) {
             ProjectWorkspaceView { showingProjects = false }
+        }
+        .sheet(item: $referenceSelection) { target in
+            ProjectDocumentSelectionView(conversationID: target.conversationID, profileID: target.profileID)
         }
         .sheet(item: $settingsTarget) { target in
             ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
@@ -277,25 +287,58 @@ struct ChatView: View {
     }
 
     private var configurationBar: some View {
-        Button(action: openConfiguration) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 8) {
-                    Image(systemName: "slider.horizontal.3")
-                    Text(model.conversationConfiguration.model.isEmpty ? model.settings.model : model.conversationConfiguration.model).lineLimit(1)
-                    if !model.conversationConfiguration.systemPrompt.isEmpty { Image(systemName: "text.alignleft").accessibilityLabel("已设置系统提示词") }
-                    Spacer(minLength: 4)
-                    Text(model.conversationConfiguration.contextLabel).lineLimit(1)
-                    Image(systemName: "chevron.down").font(.caption2)
-                }.foregroundStyle(HermesTheme.muted)
-                if let project = model.currentProject {
-                    HStack(spacing: 6) {
-                        Label(project.name, systemImage: "folder").lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: openConfiguration) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "slider.horizontal.3")
+                        Text(model.conversationConfiguration.model.isEmpty ? model.settings.model : model.conversationConfiguration.model).lineLimit(1)
+                        if !model.conversationConfiguration.systemPrompt.isEmpty { Image(systemName: "text.alignleft").accessibilityLabel("已设置系统提示词") }
                         Spacer(minLength: 4)
-                        if !project.instructions.isEmpty { Text("项目指令生效").font(.caption2) }
-                    }.foregroundStyle(HermesTheme.accent).accessibilityIdentifier("chat-project-indicator")
-                }
-            }.font(.caption).padding(.horizontal, 20).padding(.vertical, 10)
-        }.buttonStyle(.plain).disabled(model.isSending || model.needsRecovery).accessibilityLabel("对话设置，\(model.conversationConfiguration.contextLabel)")
+                        Text(model.conversationConfiguration.contextLabel).lineLimit(1)
+                        Image(systemName: "chevron.down").font(.caption2)
+                    }.foregroundStyle(HermesTheme.muted)
+                    if let project = model.currentProject {
+                        HStack(spacing: 6) {
+                            Label(project.name, systemImage: "folder").lineLimit(1)
+                            Spacer(minLength: 4)
+                            if !project.instructions.isEmpty { Text("项目指令生效").font(.caption2) }
+                        }.foregroundStyle(HermesTheme.accent).accessibilityIdentifier("chat-project-indicator")
+                    }
+                }.font(.caption).padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8)
+            }.buttonStyle(.plain).disabled(model.isSending || model.needsRecovery)
+                .accessibilityLabel("对话设置，\(model.conversationConfiguration.contextLabel)")
+            referenceBar
+        }
+    }
+
+    @ViewBuilder private var referenceBar: some View {
+        if let conversation = model.selectedConversation, model.currentProject != nil {
+            Button {
+                referenceSelection = ProjectReferenceSelectionTarget(conversationID: conversation.id, profileID: model.activeProfileID)
+            } label: {
+                HStack(spacing: 8) {
+                    Label("参考资料 \(model.currentReferenceDocuments.count)", systemImage: "doc.on.doc")
+                        .font(.caption.weight(.medium))
+                    Spacer(minLength: 6)
+                    Text(model.currentReferenceDocuments.isEmpty ? "选择随请求发送的资料" : "点按管理本对话引用")
+                        .font(.caption2).foregroundStyle(HermesTheme.muted).lineLimit(1)
+                    Image(systemName: "chevron.right").font(.caption2)
+                }.foregroundStyle(HermesTheme.accent).padding(.horizontal, 20).padding(.vertical, 9)
+            }.buttonStyle(.plain).background(HermesTheme.surface.opacity(0.55))
+                .disabled(model.isSending || model.needsRecovery).accessibilityIdentifier("chat-reference-documents")
+        } else if model.selectedConversation != nil {
+            Button(action: openConfiguration) {
+                Label("分配项目后添加参考资料", systemImage: "folder.badge.plus")
+                    .font(.caption).foregroundStyle(HermesTheme.accent)
+                    .padding(.horizontal, 20).padding(.bottom, 9)
+            }.buttonStyle(.plain).disabled(model.isSending || model.needsRecovery)
+                .accessibilityIdentifier("chat-reference-assign-project")
+        } else {
+            Text("创建项目对话后，可选择参考资料")
+                .font(.caption2).foregroundStyle(HermesTheme.muted)
+                .padding(.horizontal, 20).padding(.bottom, 9)
+        }
     }
 
     private func openConfiguration() {
