@@ -136,17 +136,20 @@ final class WorkbenchTests: XCTestCase {
         model.selectProfile(original); XCTAssertEqual(model.conversations, before)
     }
 
-    @MainActor func testBulkDeleteCleansTargetDraftsAndPreservesNewComposer() throws {
+    @MainActor func testPermanentDeleteCleansTargetDraftsAndPreservesNewComposer() throws {
         let fixture = try fixture(); let model = fixture.model(); let first = try XCTUnwrap(model.selectedID)
         model.draft = "删除草稿"
         let other = try XCTUnwrap(model.conversations.first { $0.id != first }?.id)
         model.select(other); model.draft = "保留草稿"
         model.newConversation(); model.draft = "新对话草稿"
         try model.deleteConversations([first])
+        XCTAssertEqual(try model.draftStore.snapshot()[DraftStore.localKey(profileID: model.activeProfileID, conversationID: first)], "删除草稿")
+        try model.permanentlyDeleteConversations([first])
         XCTAssertNil(model.selectedID); XCTAssertEqual(model.draft, "新对话草稿")
         XCTAssertNil(try model.draftStore.snapshot()[DraftStore.localKey(profileID: model.activeProfileID, conversationID: first)])
         model.select(other); XCTAssertEqual(model.draft, "保留草稿")
         try model.deleteConversations([other])
+        try model.permanentlyDeleteConversations([other])
         XCTAssertTrue(model.conversations.isEmpty); XCTAssertNil(model.selectedID)
         XCTAssertEqual(fixture.model().draft, "新对话草稿")
     }

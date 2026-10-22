@@ -13,6 +13,9 @@ struct HistoryView: View {
     @State private var selecting = false
     @State private var selected = Set<UUID>()
     @State private var deleting = Set<UUID>()
+    @State private var confirmingPermanentDeletion = false
+    @State private var trashPreview: Conversation?
+    @State private var recentlyTrashed = Set<UUID>()
     @State private var settingsTarget: ConversationSettingsTarget?
     @State private var document: ConversationDocument?
     @State private var exporting = false
@@ -20,10 +23,12 @@ struct HistoryView: View {
     @State private var exportName = "Hermes-对话"
 
     private var visible: [Conversation] {
-        ConversationWorkbench.filtered(model.conversations, scope: scope, query: query, tag: tag, sort: sort)
+        ConversationWorkbench.filtered(records, scope: scope, query: query, tag: tag, sort: sort)
     }
-    private var tags: [String] { Array(Set(model.conversations.flatMap { $0.workspaceState.tags })).sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+    private var records: [Conversation] { scope == .trash ? model.trashedConversations : model.conversations }
+    private var tags: [String] { Array(Set(records.flatMap { $0.workspaceState.tags })).sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
     private var visibleIDs: Set<UUID> { Set(visible.map(\.id)) }
+    private var undoIDs: Set<UUID> { recentlyTrashed.intersection(Set(model.trashedConversations.map(\.id))) }
 
     var body: some View {
         Group {
@@ -32,25 +37,24 @@ struct HistoryView: View {
         }
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .sheet(isPresented: $showingConnections) { SettingsView() }
+        .sheet(item: $trashPreview) { record in TrashConversationView(conversationID: record.id) }
         .sheet(item: $settingsTarget) { target in
             ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
         }
-        .confirmationDialog("删除 \(deleting.count) 段本机对话？", isPresented: Binding(
-            get: { !deleting.isEmpty }, set: { if !$0 { deleting = [] } }
-        ), titleVisibility: .visible) {
-            Button("删除对话与对应草稿", role: .destructive) {
+        .confirmationDialog("彻底删除 \(deleting.count) 段对话？", isPresented: $confirmingPermanentDeletion, titleVisibility: .visible) {
+            Button("彻底删除对话与对应草稿", role: .destructive) {
                 let ids = deleting
-                perform { try model.deleteConversations(ids) }
+                perform { try model.permanentlyDeleteConversations(ids) }
                 selected.subtract(ids)
                 deleting = []
             }
             Button("取消", role: .cancel) { deleting = [] }
-        } message: { Text("收藏会随原消息删除，其他对话仍引用的图片会保留。归档可以保留内容并从进行中移出。") }
+        } message: { Text("这一步无法从回收站撤销。收藏和对应草稿将删除；其他对话（包括回收站）仍引用的图片会保留。建议先导出备份。") }
         .fileExporter(isPresented: $exporting, document: document, contentType: ConversationDocument.markdownType, defaultFilename: exportName) { result in
             if case .failure(let error) = result { model.errorMessage = error.localizedDescription }
         }
         .onChange(of: visibleIDs) { _, ids in selected.formIntersection(ids) }
-        .onChange(of: model.activeProfileID) { _, _ in query = ""; tag = nil; scope = .active; selected = []; selecting = false }
+        .onChange(of: model.activeProfileID) { _, _ in query = ""; tag = nil; scope = .active; selected = []; selecting = false; recentlyTrashed = [] }
         .onChange(of: tags) { _, values in if let tag, !values.contains(tag) { self.tag = nil } }
     }
 
@@ -77,6 +81,7 @@ struct HistoryView: View {
                         metric("进行中", count: model.conversations.filter { !$0.isArchived }.count, icon: "bubble.left.and.bubble.right", target: .active)
                         metric("已置顶", count: model.conversations.filter { !$0.isArchived && $0.isPinned }.count, icon: "pin", target: .pinned)
                         metric("已归档", count: model.conversations.filter(\.isArchived).count, icon: "archivebox", target: .archived)
+                        metric("回收站", count: model.trashedConversations.count, icon: "trash", target: .trash)
                     }
                     Button(action: newConversation) {
                         HStack { Label("开始新对话", systemImage: "square.and.pencil"); Spacer(); Image(systemName: "arrow.up.right") }
@@ -96,18 +101,24 @@ struct HistoryView: View {
                         }
                     }.listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 12, trailing: 0)).listRowBackground(Color.clear)
                 }
+                if scope == .trash {
+                    Text("记录保留至你手动彻底删除。恢复会保留原来的标签、归档状态、收藏、草稿和附件；JSON 备份也包含回收站。")
+                        .font(.caption).foregroundStyle(HermesTheme.muted).listRowBackground(Color.clear)
+                }
             }.listRowSeparator(.hidden)
             Section {
                 if visible.isEmpty {
-                    ContentUnavailableView(query.isEmpty && tag == nil ? (scope == .archived ? "归档区还是空的" : "留一个位置给新想法") : "没有匹配的对话",
-                        systemImage: scope == .archived ? "archivebox" : "bubble.left.and.bubble.right",
-                        description: Text(query.isEmpty && tag == nil ? "发送消息后会自动保存。长按对话可整理标签、置顶或归档。" : "试试其他关键词、标签或范围。"))
+                    ContentUnavailableView(query.isEmpty && tag == nil ? (scope == .trash ? "回收站是空的" : scope == .archived ? "归档区还是空的" : "留一个位置给新想法") : "没有匹配的对话",
+                        systemImage: scope == .trash ? "trash" : scope == .archived ? "archivebox" : "bubble.left.and.bubble.right",
+                        description: Text(query.isEmpty && tag == nil ? (scope == .trash ? "移入回收站的对话可在这里查看和恢复。" : "发送消息后会自动保存。长按对话可整理标签、置顶或归档。") : "试试其他关键词、标签或范围。"))
                         .listRowBackground(Color.clear)
                 }
                 ForEach(visible) { conversation in
                     Button {
                         if selecting {
                             if !selected.insert(conversation.id).inserted { selected.remove(conversation.id) }
+                        } else if conversation.isTrashed {
+                            trashPreview = conversation
                         } else {
                             model.select(conversation.id)
                             openChat()
@@ -124,18 +135,13 @@ struct HistoryView: View {
                     .buttonStyle(.plain).disabled(model.isSending)
                     .accessibilityIdentifier("workbench-row-\(conversation.id)")
                     .listRowBackground(HermesTheme.surface)
-                    .contextMenu {
-                        Button("对话设置与标签", systemImage: "tag") { edit(conversation) }
-                        Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { model.togglePin(conversation.id) }
-                        Button(conversation.isArchived ? "恢复到进行中" : "归档", systemImage: conversation.isArchived ? "arrow.uturn.backward" : "archivebox") {
-                            perform { try model.setArchived([conversation.id], archived: !conversation.isArchived) }
-                        }
-                        Button("导出 Markdown", systemImage: "square.and.arrow.up") { export([conversation]) }
-                        Button("删除", systemImage: "trash", role: .destructive) { deleting = [conversation.id] }
-                    }
+                    .contextMenu { recordActions(conversation) }
                     .swipeActions {
-                        Button(conversation.isArchived ? "恢复" : "归档", systemImage: "archivebox") {
-                            perform { try model.setArchived([conversation.id], archived: !conversation.isArchived) }
+                        Button(conversation.isTrashed ? "恢复" : conversation.isArchived ? "取消归档" : "归档", systemImage: "archivebox") {
+                            perform {
+                                if conversation.isTrashed { try model.restoreConversations([conversation.id]) }
+                                else { try model.setArchived([conversation.id], archived: !conversation.isArchived) }
+                            }
                         }.tint(HermesTheme.muted)
                     }
                 }
@@ -161,15 +167,29 @@ struct HistoryView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if selecting {
                 HStack(spacing: 20) {
-                    Button(scope == .archived ? "恢复" : "归档", systemImage: "archivebox") {
-                        perform { try model.setArchived(selected, archived: scope != .archived) }
+                    Button(scope == .trash ? "恢复" : scope == .archived ? "取消归档" : "归档", systemImage: "archivebox") {
+                        perform {
+                            if scope == .trash { try model.restoreConversations(selected) }
+                            else { try model.setArchived(selected, archived: scope != .archived) }
+                        }
                         selected = []
                     }
                     Button("导出", systemImage: "square.and.arrow.up") { export(visible.filter { selected.contains($0.id) }) }
                     Spacer()
-                    Button("删除", systemImage: "trash", role: .destructive) { deleting = selected }
+                    Button(scope == .trash ? "彻底删除" : "移到回收站", systemImage: "trash", role: .destructive) {
+                        if scope == .trash { requestPermanentDeletion(selected) }
+                        else { moveToTrash(selected) }
+                    }
                 }.font(.subheadline).padding(16).background(HermesTheme.surface)
                     .disabled(selected.isEmpty || model.isSending || model.needsRecovery)
+            } else if !undoIDs.isEmpty {
+                HStack {
+                    Label("已移到回收站", systemImage: "trash")
+                    Spacer()
+                    Button("撤销") {
+                        perform { try model.restoreConversations(undoIDs); recentlyTrashed = [] }
+                    }.disabled(model.isSending || model.needsRecovery)
+                }.font(.subheadline).padding(16).background(HermesTheme.surface)
             }
         }
         .alert("操作失败", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
@@ -181,7 +201,7 @@ struct HistoryView: View {
         Button { scope = target } label: {
             VStack(alignment: .leading, spacing: 8) {
                 Image(systemName: icon).foregroundStyle(HermesTheme.accent)
-                Text("\(count)").font(.title2.weight(.semibold))
+                Text("\(count)").font(.title2.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.6)
                 Text(title).font(.caption).foregroundStyle(HermesTheme.muted)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
                 .background(scope == target ? HermesTheme.raised : HermesTheme.surface, in: RoundedRectangle(cornerRadius: 12))
@@ -196,6 +216,25 @@ struct HistoryView: View {
         }.buttonStyle(.plain)
     }
     private func newConversation() { model.newConversation(); openChat() }
+    @ViewBuilder private func recordActions(_ conversation: Conversation) -> some View {
+        if conversation.isTrashed {
+            Button("查看原消息", systemImage: "eye") { trashPreview = conversation }
+            Button("恢复对话", systemImage: "arrow.uturn.backward") { perform { try model.restoreConversations([conversation.id]) } }
+            Button("彻底删除", systemImage: "trash", role: .destructive) { requestPermanentDeletion([conversation.id]) }
+        } else {
+            Button("对话设置与标签", systemImage: "tag") { edit(conversation) }
+            Button(conversation.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { model.togglePin(conversation.id) }
+            Button(conversation.isArchived ? "取消归档" : "归档", systemImage: "archivebox") {
+                perform { try model.setArchived([conversation.id], archived: !conversation.isArchived) }
+            }
+            Button("移到回收站", systemImage: "trash", role: .destructive) { moveToTrash([conversation.id]) }
+        }
+        Button("导出 Markdown", systemImage: "square.and.arrow.up") { export([conversation]) }
+    }
+    private func requestPermanentDeletion(_ ids: Set<UUID>) { deleting = ids; confirmingPermanentDeletion = true }
+    private func moveToTrash(_ ids: Set<UUID>) {
+        perform { try model.deleteConversations(ids); recentlyTrashed = ids; selected.subtract(ids) }
+    }
     private func openChat() { if let onOpen { onOpen() } else { dismiss() } }
     private func edit(_ conversation: Conversation) { model.select(conversation.id); showSettings() }
     private func showSettings() { settingsTarget = ConversationSettingsTarget(conversationID: model.selectedID, profileID: model.activeProfileID, draftKey: model.draftKey) }

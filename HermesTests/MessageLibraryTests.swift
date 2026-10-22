@@ -152,7 +152,7 @@ final class MessageLibraryTests: XCTestCase {
         XCTAssertEqual(model.draft.count, 100_000)
     }
 
-    @MainActor func testOpeningSourceRestoresItsDraftAndRejectsDeletedMessage() throws {
+    @MainActor func testOpeningSourceRestoresDraftAndTrashPreservesItUntilRestore() throws {
         let fixture = try makeFixture()
         let model = fixture.model()
         let destination = try XCTUnwrap(model.selectedID)
@@ -165,8 +165,13 @@ final class MessageLibraryTests: XCTestCase {
         XCTAssertThrowsError(try model.openMessage(fixture.target))
         XCTAssertThrowsError(try model.quoteMessage(fixture.target))
         XCTAssertThrowsError(try model.toggleBookmark(fixture.target))
-        XCTAssertEqual(model.selectedID, destination)
+        XCTAssertNil(model.selectedID)
+        XCTAssertEqual(model.draft, "")
+        model.select(destination)
         XCTAssertEqual(model.draft, "当前草稿")
+        try model.restoreConversations([fixture.target.conversationID])
+        try model.openMessage(fixture.target)
+        XCTAssertEqual(model.draft, "原文草稿")
     }
 
     @MainActor func testBranchesDoNotDuplicateBookmarkButPreserveOriginalAndImages() throws {

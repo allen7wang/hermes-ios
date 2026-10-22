@@ -241,8 +241,9 @@ struct HermesClient {
         configuration: ConversationConfiguration = ConversationConfiguration(),
         onEvent: (ChatStreamEvent) async -> Void
     ) async throws -> String {
-        let options = try configuration.validated()
-        var context = try options.history(from: messages).map { try CompletionMessage($0, directory: attachmentDirectory) }
+        let plan = try PreparedChatContext(messages: messages, configuration: configuration)
+        let options = plan.configuration
+        var context = try plan.messages.map { try CompletionMessage($0, directory: attachmentDirectory) }
         if !options.systemPrompt.isEmpty { context.insert(CompletionMessage(systemPrompt: options.systemPrompt), at: 0) }
         let url = try endpoint("v1", "chat", "completions")
         var request = authorizedRequest(url: url)

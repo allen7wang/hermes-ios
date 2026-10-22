@@ -35,7 +35,7 @@ final class ConversationBranchTests: XCTestCase {
     }
 
     @MainActor
-    func testSharedImageSurvivesOriginalDeletionAndBranchBackupRestore() throws {
+    func testSharedImageSurvivesTrashAndBranchBackupRestoreUntilPermanentDeletion() throws {
         let fixture = try makeFixture(withImage: true)
         let model = fixture.model()
         let original = try XCTUnwrap(model.selectedConversation)
@@ -55,6 +55,8 @@ final class ConversationBranchTests: XCTestCase {
         let restoredImage = try XCTUnwrap(destination.selectedConversation?.messages.last?.imageID)
         XCTAssertNotNil(ImageAttachmentStore.image(restoredImage, directory: destination.attachmentDirectory))
         model.delete(branchID)
+        XCTAssertNotNil(ImageAttachmentStore.image(imageID, directory: model.attachmentDirectory))
+        try model.permanentlyDeleteConversations([original.id, branchID])
         XCTAssertFalse(FileManager.default.fileExists(atPath: ImageAttachmentStore.fileURL(for: imageID, directory: model.attachmentDirectory).path))
     }
 

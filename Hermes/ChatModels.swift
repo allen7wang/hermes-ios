@@ -41,6 +41,7 @@ struct Conversation: Identifiable, Codable, Equatable {
     var isPinned: Bool { pinned == true }
     var workspaceState: ConversationWorkspace { workspace ?? ConversationWorkspace() }
     var isArchived: Bool { workspaceState.archived }
+    var isTrashed: Bool { workspaceState.trashedAt != nil }
 }
 
 struct ConnectionSettings: Hashable {

@@ -11,30 +11,43 @@ struct MessageLibraryView: View {
     @State private var role: MessageLibraryRole = .all
     @State private var results: [MessageLibraryItem] = []
     @State private var searching = false
+    @State private var scope: MessageLibraryScope = .all
+    @State private var tag: String?
 
     private struct QueryRequest: Equatable {
         let conversations: [Conversation]
         let query: String
         let filter: MessageLibraryFilter
         let role: MessageLibraryRole
+        let scope: MessageLibraryScope
+        let tag: String?
     }
 
     private var request: QueryRequest {
-        QueryRequest(conversations: model.conversations, query: query, filter: filter, role: role)
+        QueryRequest(conversations: model.conversations, query: query, filter: filter, role: role, scope: scope, tag: tag)
     }
+    private var availableTags: [String] { Array(Set(model.conversations.flatMap { $0.workspaceState.tags })).sorted() }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Text("\(model.activeProfileName) · 本机记录 · \(results.count) 条结果")
+                        Text("\(model.activeProfileName) · \(scope.title) · \(results.count) 条结果")
                             .font(.caption).foregroundStyle(HermesTheme.muted)
                         if searching { ProgressView().controlSize(.mini) }
                     }
                     Picker("消息范围", selection: $filter) {
                         ForEach(MessageLibraryFilter.allCases) { Text($0.label).tag($0) }
                     }.pickerStyle(.segmented)
+                    if tag != nil || scope != .all || role != .all {
+                        HStack {
+                            Text([scope.title, role.label, tag.map { "#" + $0 } ?? "全部标签"].joined(separator: " · "))
+                                .font(.caption).foregroundStyle(HermesTheme.accent).lineLimit(2)
+                            Spacer()
+                            Button("清除筛选") { scope = .all; role = .all; tag = nil }.font(.caption)
+                        }
+                    }
                 }.padding(16)
                 if results.isEmpty {
                     if searching { ProgressView("正在查找…").frame(maxHeight: .infinity) }
@@ -56,7 +69,7 @@ struct MessageLibraryView: View {
                 }
             }
             .background(HermesTheme.background)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索正文、对话标题或收藏备注")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索正文、对话标题、标签或备注")
             .navigationTitle("本机消息库").navigationBarTitleDisplayMode(.inline)
             .task(id: request) {
                 let snapshot = request
@@ -64,7 +77,8 @@ struct MessageLibraryView: View {
                 do { if !snapshot.query.isEmpty { try await Task.sleep(for: .milliseconds(250)) } }
                 catch { return }
                 let search = Task.detached(priority: .userInitiated) {
-                    MessageLibrary.items(in: snapshot.conversations, query: snapshot.query, filter: snapshot.filter, role: snapshot.role)
+                    MessageLibrary.items(in: snapshot.conversations, query: snapshot.query, filter: snapshot.filter,
+                                         role: snapshot.role, scope: snapshot.scope, tag: snapshot.tag)
                 }
                 let matches = await withTaskCancellationHandler(operation: { await search.value }, onCancel: { search.cancel() })
                 guard !Task.isCancelled else { return }
@@ -81,14 +95,23 @@ struct MessageLibraryView: View {
                         Picker("消息角色", selection: $role) {
                             ForEach(MessageLibraryRole.allCases) { Text($0.label).tag($0) }
                         }
+                        Picker("对话范围", selection: $scope) {
+                            ForEach(MessageLibraryScope.allCases) { Text($0.title).tag($0) }
+                        }
+                        Picker("对话标签", selection: $tag) {
+                            Text("全部标签").tag(String?.none)
+                            ForEach(availableTags, id: \.self) { Text($0).tag(Optional($0)) }
+                        }
                     } label: {
-                        Image(systemName: role == .all ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        Image(systemName: role == .all && scope == .all && tag == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
                     }
-                    .accessibilityLabel("筛选消息角色")
+                    .accessibilityLabel("筛选角色、对话范围与标签")
                 }
             }
         }
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
+        .onChange(of: availableTags) { _, values in if let tag, !values.contains(tag) { self.tag = nil } }
+        .onChange(of: model.activeProfileID) { _, _ in query = ""; scope = .all; role = .all; tag = nil }
     }
 }
 
@@ -130,6 +153,10 @@ private struct MessageLibraryRow: View {
                     } else { Text(note) }
                 } icon: { Image(systemName: "note.text") }
                     .font(.caption).foregroundStyle(HermesTheme.muted).lineLimit(3)
+            }
+            if item.conversationArchived || !item.conversationTags.isEmpty {
+                Text((item.conversationArchived ? "已归档 · " : "") + item.conversationTags.map { "#" + $0 }.joined(separator: " "))
+                    .font(.caption).foregroundStyle(HermesTheme.accent).lineLimit(1)
             }
         }.foregroundStyle(.white).padding(.vertical, 8)
     }

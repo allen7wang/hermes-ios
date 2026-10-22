@@ -179,6 +179,8 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(try ImageAttachmentStore.load(id, directory: model.attachmentDirectory), source.image)
         XCTAssertEqual(try model.makeBackup().images.count, 1)
         model.delete(model.conversations[0].id)
+        XCTAssertEqual(try ImageAttachmentStore.load(id, directory: model.attachmentDirectory), source.image)
+        try model.permanentlyDeleteConversations(Set(model.trashedConversations.map(\.id)))
         XCTAssertFalse(FileManager.default.fileExists(atPath: ImageAttachmentStore.fileURL(for: id, directory: model.attachmentDirectory).path))
     }
 

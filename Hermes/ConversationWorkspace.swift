@@ -34,6 +34,7 @@ struct ConversationWorkspace: Codable, Equatable {
     var tags: [String] = []
     var archived = false
     var configuration = ConversationConfiguration()
+    var trashedAt: Date?
     var isDefault: Bool { self == Self() }
 
     static func normalizedTags(_ raw: String) throws -> [String] {
@@ -51,13 +52,14 @@ struct ConversationWorkspace: Codable, Equatable {
 
     func validate() throws {
         guard try Self.normalizedTags(tags) == tags, try configuration.validated() == configuration else { throw WorkspaceError.invalidConfiguration }
+        if let trashedAt, !trashedAt.timeIntervalSince1970.isFinite { throw WorkspaceError.invalidConfiguration }
     }
 }
 
 enum ConversationScope: String, CaseIterable, Identifiable {
-    case active, pinned, archived
+    case active, pinned, archived, trash
     var id: String { rawValue }
-    var title: String { switch self { case .active: "进行中"; case .pinned: "已置顶"; case .archived: "已归档" } }
+    var title: String { switch self { case .active: "进行中"; case .pinned: "已置顶"; case .archived: "已归档"; case .trash: "回收站" } }
 }
 
 enum ConversationSort: String, CaseIterable, Identifiable {
@@ -70,7 +72,8 @@ enum ConversationWorkbench {
     static func filtered(_ conversations: [Conversation], scope: ConversationScope, query: String, tag: String?, sort: ConversationSort) -> [Conversation] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return conversations.filter { conversation in
-            let inScope = scope == .archived ? conversation.isArchived : !conversation.isArchived && (scope != .pinned || conversation.isPinned)
+            let inScope = scope == .trash ? conversation.isTrashed : !conversation.isTrashed &&
+                (scope == .archived ? conversation.isArchived : !conversation.isArchived && (scope != .pinned || conversation.isPinned))
             let hasTag = tag == nil || conversation.workspaceState.tags.contains(tag!)
             let matches = query.isEmpty || ([conversation.title] + conversation.workspaceState.tags + conversation.messages.map(\.content))
                 .contains { $0.localizedStandardContains(query) }

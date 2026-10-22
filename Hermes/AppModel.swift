@@ -10,6 +10,7 @@ final class AppModel: ObservableObject {
     }
 
     @Published private(set) var conversations: [Conversation] = []
+    @Published private(set) var trashedConversations: [Conversation] = []
     @Published private(set) var selectedID: UUID?
     @Published private(set) var isSending = false
     @Published private(set) var streamedReply = ""
@@ -249,10 +250,11 @@ final class AppModel: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
 
-    private func requireWorkspaceAccess(_ ids: Set<UUID>) throws {
+    private func requireWorkspaceAccess(_ ids: Set<UUID>, inTrash: Bool = false) throws {
         guard !needsRecovery else { throw ProfileError.storageUnavailable }
         guard !isSending else { throw WorkspaceError.busy }
-        guard !ids.isEmpty, ids.isSubset(of: Set(conversations.map(\.id))) else { throw WorkspaceError.missing }
+        let records = inTrash ? trashedConversations : conversations
+        guard !ids.isEmpty, ids.isSubset(of: Set(records.map(\.id))) else { throw WorkspaceError.missing }
     }
 
     private func commitConversations(_ candidate: [Conversation]) throws {
@@ -274,12 +276,39 @@ final class AppModel: ObservableObject {
 
     func deleteConversations(_ ids: Set<UUID>) throws {
         try requireWorkspaceAccess(ids)
-        let removedImages = Set(conversations.filter { ids.contains($0.id) }.flatMap { $0.messages.compactMap(\.imageID) })
+        var candidate = allConversations
+        let now = Date()
+        for index in candidate.indices where ids.contains(candidate[index].id) {
+            var workspace = candidate[index].workspaceState
+            workspace.trashedAt = now
+            candidate[index].workspace = workspace
+        }
+        let nextID = selectedID.map { ids.contains($0) } == true ? nil : selectedID
+        try commitWorkspaceTransaction(candidate, texts: draftStore.snapshot(), selectedID: nextID)
+    }
+
+    func restoreConversations(_ ids: Set<UUID>) throws {
+        try requireWorkspaceAccess(ids, inTrash: true)
+        var candidate = allConversations
+        for index in candidate.indices where ids.contains(candidate[index].id) {
+            var workspace = candidate[index].workspaceState
+            workspace.trashedAt = nil
+            candidate[index].workspace = workspace.isDefault ? nil : workspace
+        }
+        try commitConversations(candidate)
+    }
+
+    func permanentlyDeleteConversations(_ ids: Set<UUID>) throws {
+        try requireWorkspaceAccess(ids, inTrash: true)
+        let removedImages = Set(trashedConversations.filter { ids.contains($0.id) }.flatMap { $0.messages.compactMap(\.imageID) })
         let candidate = allConversations.filter { !ids.contains($0.id) }
         var texts = try draftStore.snapshot()
         for id in ids { texts.removeValue(forKey: DraftStore.localKey(profileID: activeProfileID, conversationID: id)) }
-        let nextID = selectedID.map { ids.contains($0) } == true
-            ? candidate.first { $0.profileID == activeProfileID && !$0.isArchived }?.id : selectedID
+        try commitWorkspaceTransaction(candidate, texts: texts, selectedID: selectedID)
+        removeUnusedImages(removedImages)
+    }
+
+    private func commitWorkspaceTransaction(_ candidate: [Conversation], texts: [String: String], selectedID nextID: UUID?) throws {
         var selections = selectedConversations
         selections[activeProfileID.uuidString] = nextID?.uuidString ?? ""
         let library = ConnectionLibrary(profiles: profiles, activeID: activeProfileID, selectedConversations: selections)
@@ -295,7 +324,6 @@ final class AppModel: ObservableObject {
         selectedID = nextID
         refreshConversations()
         draft = draftStore.text(for: draftKey)
-        removeUnusedImages(removedImages)
     }
 
     func saveConversationSettings(title: String, tags: String, configuration: ConversationConfiguration,
@@ -329,7 +357,7 @@ final class AppModel: ObservableObject {
 
     func rename(_ id: UUID, to rawTitle: String) {
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !storageLoadFailed, !title.isEmpty, let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID }) else { return }
+        guard !storageLoadFailed, !title.isEmpty, let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID && !$0.isTrashed }) else { return }
         var candidate = allConversations
         candidate[index].title = String(title.prefix(80))
         do { try commitConversations(candidate) } catch { errorMessage = error.localizedDescription }
@@ -337,7 +365,7 @@ final class AppModel: ObservableObject {
 
     func togglePin(_ id: UUID) {
         guard !storageLoadFailed, !isSending,
-              let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID }) else { return }
+              let index = allConversations.firstIndex(where: { $0.id == id && $0.profileID == activeProfileID && !$0.isTrashed }) else { return }
         var candidate = allConversations
         candidate[index].pinned = !candidate[index].isPinned
         do { try commitConversations(candidate) } catch { errorMessage = error.localizedDescription }
@@ -346,7 +374,8 @@ final class AppModel: ObservableObject {
     func libraryItem(_ target: LocalMessageTarget) -> MessageLibraryItem? {
         guard let conversation = conversations.first(where: { $0.id == target.conversationID }),
               let message = conversation.messages.first(where: { $0.id == target.messageID }) else { return nil }
-        return MessageLibraryItem(id: target, conversationTitle: conversation.title, message: message)
+        return MessageLibraryItem(id: target, conversationTitle: conversation.title, message: message,
+                                  conversationTags: conversation.workspaceState.tags, conversationArchived: conversation.isArchived)
     }
 
     func toggleBookmark(_ target: LocalMessageTarget) throws {
@@ -367,7 +396,7 @@ final class AppModel: ObservableObject {
 
     private func changeBookmark(_ target: LocalMessageTarget, transform: (MessageBookmark?) throws -> MessageBookmark?) throws {
         guard !needsRecovery else { throw ProfileError.storageUnavailable }
-        guard let index = allConversations.firstIndex(where: { $0.id == target.conversationID && $0.profileID == activeProfileID }),
+        guard let index = allConversations.firstIndex(where: { $0.id == target.conversationID && $0.profileID == activeProfileID && !$0.isTrashed }),
               let messageIndex = allConversations[index].messages.firstIndex(where: { $0.id == target.messageID }) else {
             throw MessageLibraryError.missing
         }
@@ -524,6 +553,19 @@ final class AppModel: ObservableObject {
         activeTask?.cancel()
     }
 
+    func previewNextRequest(_ rawText: String, hasImage: Bool, expectedDraftKey: String) throws -> ChatContextPreview {
+        guard expectedDraftKey == draftKey else { throw WorkspaceError.changedContext }
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard !isSending else { throw WorkspaceError.busy }
+        guard selectedConversation?.isArchived != true else { throw WorkspaceError.archived }
+        let text = try ChatInput.text(rawText, hasImage: hasImage)
+        let source = selectedConversation?.messages ?? []
+        let input = ChatMessage(role: .user, content: text, imageID: hasImage ? UUID() : nil)
+        return ChatContextPreview(profileID: activeProfileID, draftKey: draftKey, profileName: activeProfileName,
+            fallbackModel: settings.model, rawText: rawText, inputID: input.id, sourceIDs: source.map(\.id),
+            plan: try PreparedChatContext(messages: source + [input], configuration: conversationConfiguration))
+    }
+
     func retryLastResponse() {
         guard !isSending,
               settings.isConfigured,
@@ -547,9 +589,10 @@ final class AppModel: ObservableObject {
               let source = selectedConversation,
               let index = source.messages.firstIndex(where: { $0.id == messageID }),
               source.messages[index].role == .user else { return false }
-        let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         let imageID = keepImage ? source.messages[index].imageID : nil
-        guard !text.isEmpty || imageID != nil else { return false }
+        let text: String
+        do { text = try ChatInput.text(content, hasImage: imageID != nil) }
+        catch { errorMessage = error.localizedDescription; return false }
         guard settings.isConfigured else {
             errorMessage = "请先在连接管理中填写 Hermes 服务地址和 API 密钥。"
             return false
@@ -575,6 +618,7 @@ final class AppModel: ObservableObject {
                                                 createdAt: $0.createdAt, imageID: $0.imageID) }
         var workspace = source.workspaceState
         workspace.archived = false
+        workspace.trashedAt = nil
         let branch = Conversation(title: String(source.title.prefix(75)) + " · 分支",
                                   messages: copies, updatedAt: Date(), profileID: activeProfileID,
                                   workspace: workspace.isDefault ? nil : workspace)
@@ -594,12 +638,14 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     func send(_ rawText: String, imageData: Data? = nil) -> Bool {
-        guard !storageLoadFailed else {
+        guard !needsRecovery else {
             errorMessage = ProfileError.storageUnavailable.localizedDescription
             return false
         }
-        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || imageData != nil, !isSending else { return false }
+        guard !isSending else { return false }
+        let text: String
+        do { text = try ChatInput.text(rawText, hasImage: imageData != nil) }
+        catch { errorMessage = error.localizedDescription; return false }
         guard selectedConversation?.isArchived != true else {
             errorMessage = WorkspaceError.archived.localizedDescription
             return false
@@ -713,7 +759,9 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshConversations() {
-        conversations = allConversations.filter { $0.profileID == activeProfileID }
+        trashedConversations = allConversations.filter { $0.profileID == activeProfileID && $0.isTrashed }
+            .sorted { $0.workspaceState.trashedAt! > $1.workspaceState.trashedAt! }
+        conversations = allConversations.filter { $0.profileID == activeProfileID && !$0.isTrashed }
             .sorted {
                 if $0.isPinned != $1.isPinned { return $0.isPinned }
                 return $0.updatedAt > $1.updatedAt

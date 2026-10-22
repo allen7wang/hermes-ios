@@ -28,7 +28,7 @@ struct BackupView: View {
             Section {
                 Label("将你的记录保存为备份", systemImage: "externaldrive.fill")
                     .foregroundStyle(HermesTheme.accent)
-                Text("包含所有连接的本机对话、图片、草稿、收藏备注、提示词模板，以及标签、归档状态和对话设置。")
+                Text("包含所有连接的本机对话、回收站、图片、草稿、收藏备注、提示词模板，以及标签、归档状态和对话设置。")
                     .font(.subheadline).foregroundStyle(HermesTheme.muted)
             }
             .listRowBackground(HermesTheme.surface)
@@ -60,11 +60,12 @@ struct BackupView: View {
                     LabeledContent("备份时间") { Text(archive.createdAt, format: .dateTime.year().month().day().hour().minute()) }
                     LabeledContent("连接", value: "\(archive.profiles.count) 个")
                     LabeledContent("本机对话", value: "\(archive.conversations.count) 段")
+                    LabeledContent("其中回收站", value: "\(archive.trashCount) 段")
                     LabeledContent("图片", value: "\(archive.images.count) 张")
                     LabeledContent("收藏消息", value: "\(archive.bookmarkCount) 条")
                     LabeledContent("提示词模板", value: "\(archive.templateCount) 个")
                     if archive.version >= 2 {
-                        Text(archive.version >= 4 ? "含工作台设置的备份需 Hermes iOS v1.0.0 或更新版本导入。" : archive.version >= 3 ? "含提示词模板的备份需 Hermes iOS v0.10.0 或更新版本导入。" : "含消息收藏的备份需 Hermes iOS v0.9.0 或更新版本导入。")
+                        Text(archive.version >= 5 ? "含回收站的备份需 Hermes iOS v1.1.0 或更新版本导入；导入后仍保留在回收站。" : archive.version >= 4 ? "含工作台设置的备份需 Hermes iOS v1.0.0 或更新版本导入。" : archive.version >= 3 ? "含提示词模板的备份需 Hermes iOS v0.10.0 或更新版本导入。" : "含消息收藏的备份需 Hermes iOS v0.9.0 或更新版本导入。")
                             .font(.footnote).foregroundStyle(HermesTheme.muted)
                     }
                     Text(preview.description).font(.subheadline)

@@ -31,6 +31,7 @@ struct ChatView: View {
     @State private var settingsTarget: ConversationSettingsTarget?
     @State private var exportDocument: ConversationDocument?
     @State private var exporting = false
+    @State private var contextPreview: ChatContextPreview?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,6 +108,9 @@ struct ChatView: View {
         .sheet(isPresented: $showingHistory) { HistoryView() }
         .sheet(isPresented: $showingRemote) { RemoteWorkspaceView() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(item: $contextPreview) { preview in
+            ChatContextPreviewView(preview: preview, pendingImage: pendingImage)
+        }
         .sheet(item: $settingsTarget) { target in
             ConversationSettingsView(conversationID: target.conversationID, profileID: target.profileID, draftKey: target.draftKey)
         }
@@ -399,8 +403,16 @@ struct ChatView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button("提示词模板", systemImage: "text.badge.plus") { openPrompts() }
-                .font(.caption.weight(.medium)).foregroundStyle(HermesTheme.accent)
+            HStack(spacing: 20) {
+                Button("提示词模板", systemImage: "text.badge.plus") { openPrompts() }
+                Button("上下文预览", systemImage: "eye") {
+                    performLocalAction {
+                        contextPreview = try model.previewNextRequest(model.draft, hasImage: pendingImage != nil, expectedDraftKey: model.draftKey)
+                    }
+                }.disabled(model.isSending || loadingPhoto || model.needsRecovery ||
+                    (model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && pendingImage == nil))
+                .accessibilityIdentifier("preview-chat-context")
+            }.font(.caption.weight(.medium)).foregroundStyle(HermesTheme.accent)
             if let composerNotice {
                 HStack {
                     Text(composerNotice).font(.caption).foregroundStyle(HermesTheme.accent)

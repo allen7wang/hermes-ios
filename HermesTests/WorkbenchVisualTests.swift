@@ -25,6 +25,27 @@ final class WorkbenchVisualTests: XCTestCase {
         try await snapshot(view, size: CGSize(width: 1024, height: 1000), name: "server-tasks-tablet")
     }
 
+    @MainActor func testContextPreviewCompactLayout() async throws {
+        let model = try makeModel()
+        model.draft = "请根据以上内容，给我一份可执行的发布计划。"
+        let preview = try model.previewNextRequest(model.draft, hasImage: false, expectedDraftKey: model.draftKey)
+        try await snapshot(ChatContextPreviewView(preview: preview).environmentObject(model), size: CGSize(width: 390, height: 844), name: "context-preview")
+    }
+
+    @MainActor func testTrashDetailCompactLayout() async throws {
+        let model = try makeModel(); let id = try XCTUnwrap(model.selectedID)
+        model.draft = "恢复后继续补充这段草稿"
+        try model.deleteConversations([id])
+        try await snapshot(TrashConversationView(conversationID: id).environmentObject(model), size: CGSize(width: 390, height: 844), name: "trash-detail")
+    }
+
+    @MainActor func testMessageLibraryTagAndArchiveLayout() async throws {
+        let model = try makeModel()
+        let id = try XCTUnwrap(model.selectedID)
+        try model.setArchived([id], archived: true)
+        try await snapshot(MessageLibraryView(embedded: true, onOpen: { _ in }).environmentObject(model), size: CGSize(width: 390, height: 844), name: "library-filters")
+    }
+
     @MainActor private func snapshot<V: View>(_ view: V, size: CGSize, name: String) async throws {
         let controller = UIHostingController(rootView: view.environment(\.locale, Locale(identifier: "zh_CN")).preferredColorScheme(.dark))
         let window = UIWindow(frame: CGRect(origin: .zero, size: size))
@@ -41,7 +62,7 @@ final class WorkbenchVisualTests: XCTestCase {
         }
         XCTAssertGreaterThan(image.size.width, 300)
         let data = try XCTUnwrap(image.pngData())
-        let directory = URL(fileURLWithPath: "/private/tmp/hermes-v1-previews")
+        let directory = URL(fileURLWithPath: "/private/tmp/hermes-v1-1-previews")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: directory.appendingPathComponent(name + ".png"))
         let attachment = XCTAttachment(image: image)
@@ -58,7 +79,7 @@ final class WorkbenchVisualTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let records = [
-            Conversation(title: "把 v1.0 发布准备好", messages: [
+            Conversation(title: "把 v1.1 发布准备好", messages: [
                 ChatMessage(role: .user, content: "帮我整理发布前需要完成的工作。"),
                 ChatMessage(role: .assistant, content: "先确认功能与测试，再检查备份兼容、文档和版本号。", bookmark: .init(createdAt: Date(), note: "发布清单"))
             ], updatedAt: Date(), pinned: true, workspace: .init(tags: ["工作", "Hermes"], configuration: .init(systemPrompt: "用中文回答，先给结论。", contextTurns: 6))),

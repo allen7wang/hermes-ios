@@ -15,7 +15,9 @@ struct BackupArchive: Codable {
 
     var bookmarkCount: Int { conversations.reduce(0) { $0 + $1.messages.filter { $0.bookmark != nil }.count } }
     var templateCount: Int { profiles.reduce(0) { $0 + $1.templates.count } }
+    var trashCount: Int { conversations.filter(\.isTrashed).count }
     var minimumVersion: Int {
+        if trashCount > 0 { return 5 }
         if profiles.contains(where: { $0.conversationDefaults != nil }) || conversations.contains(where: { $0.workspace != nil }) { return 4 }
         if templateCount > 0 { return 3 }
         return bookmarkCount > 0 ? 2 : 1
@@ -47,7 +49,7 @@ struct BackupArchive: Codable {
 
     func validate() throws {
         guard format == "hermes-ios-backup" else { throw BackupError.invalidFile }
-        guard (1...4).contains(version) else { throw BackupError.unsupportedVersion }
+        guard (1...5).contains(version) else { throw BackupError.unsupportedVersion }
         guard version >= minimumVersion else { throw BackupError.invalidFile }
         guard !profiles.isEmpty, profiles.count <= 100,
               conversations.count <= 5_000,

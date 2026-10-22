@@ -10,6 +10,8 @@ struct MessageLibraryItem: Identifiable, Equatable {
     let id: LocalMessageTarget
     let conversationTitle: String
     let message: ChatMessage
+    var conversationTags: [String] = []
+    var conversationArchived = false
     var roleLabel: String { message.role == .assistant ? "Hermes" : "我" }
     var preview: String {
         message.content.isEmpty && message.imageID != nil ? "[图片]" : String(message.content.prefix(160))
@@ -30,22 +32,34 @@ enum MessageLibraryRole: String, CaseIterable, Identifiable {
     }
 }
 
+enum MessageLibraryScope: String, CaseIterable, Identifiable {
+    case all, active, archived
+    var id: Self { self }
+    var title: String { switch self { case .all: "全部对话"; case .active: "进行中"; case .archived: "已归档" } }
+    func includes(_ conversation: Conversation) -> Bool {
+        !conversation.isTrashed && (self == .all || (self == .archived ? conversation.isArchived : !conversation.isArchived))
+    }
+}
+
 enum MessageLibrary {
     static func items(in conversations: [Conversation], query: String = "", filter: MessageLibraryFilter = .all,
-                      role: MessageLibraryRole = .all) -> [MessageLibraryItem] {
+                      role: MessageLibraryRole = .all, scope: MessageLibraryScope = .all,
+                      tag: String? = nil) -> [MessageLibraryItem] {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let matches = conversations.flatMap { conversation -> [MessageLibraryItem] in
             guard !Task.isCancelled else { return [] }
+            guard scope.includes(conversation), tag == nil || conversation.workspaceState.tags.contains(tag!) else { return [] }
             return conversation.messages.compactMap { message -> MessageLibraryItem? in
                 guard !Task.isCancelled else { return nil }
                 guard filter != .bookmarks || message.bookmark != nil,
                       role == .all || role.rawValue == message.role.rawValue else { return nil }
-                let fields = [conversation.title, message.content, message.bookmark?.note ?? ""]
+                let fields = [conversation.title, message.content, message.bookmark?.note ?? ""] + conversation.workspaceState.tags
                 guard query.isEmpty || fields.contains(where: {
                     $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive], locale: .current) != nil
                 }) else { return nil }
                 return MessageLibraryItem(id: LocalMessageTarget(conversationID: conversation.id, messageID: message.id),
-                                          conversationTitle: conversation.title, message: message)
+                                          conversationTitle: conversation.title, message: message,
+                                          conversationTags: conversation.workspaceState.tags, conversationArchived: conversation.isArchived)
             }
         }
         guard !Task.isCancelled else { return [] }
