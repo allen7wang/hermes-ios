@@ -16,6 +16,7 @@ struct ProjectDocumentBatchView: View {
     @State private var selection: Set<UUID> = []
     @State private var copyReview: DocumentBatchReview?
     @State private var exportReview: DocumentBatchReview?
+    @State private var additionReview: DocumentBatchReview?
     @State private var deletionReview: ProjectDocumentDeletionReview?
     @State private var usageFilter: ProjectDocumentUsageFilter = .all
     @State private var usageSort: ProjectDocumentUsageSort = .recent
@@ -85,6 +86,10 @@ struct ProjectDocumentBatchView: View {
                     if visible.isEmpty { Text("没有匹配的资料").foregroundStyle(HermesTheme.muted) }
                 }.listRowBackground(HermesTheme.surface)
                 Section {
+                    Button("添加到对话引用", systemImage: "text.badge.plus") {
+                        review { additionReview = $0 }
+                    }.disabled(selected.count > ProjectDocument.selectionLimit || selected.reduce(0) { $0 + $1.body.count } > ProjectDocument.selectionCharacterLimit)
+                        .accessibilityIdentifier("knowledge-batch-add-references")
                     Button("检查并导出 Markdown", systemImage: "square.and.arrow.up") {
                         review { exportReview = $0 }
                     }.accessibilityIdentifier("knowledge-batch-export")
@@ -98,7 +103,7 @@ struct ProjectDocumentBatchView: View {
                         }
                     }.accessibilityIdentifier("knowledge-batch-delete")
                 } header: { Text("所选资料") } footer: {
-                    Text("复制会新建独立资料，保留同名项；原资料和对话引用保持原状。删除需再次确认，并解除所有相关对话的引用。")
+                    Text("添加引用一次最多选择 5 篇、50,000 正文字符，仍需检查目标对话容量后保存。复制会新建独立资料，保留同名项；删除需再次确认，并解除所有相关引用。")
                 }.disabled(unavailable || selected.isEmpty).listRowBackground(HermesTheme.surface)
             }
             .listStyle(.insetGrouped).scrollContentBackground(.hidden).background(HermesTheme.background)
@@ -112,6 +117,9 @@ struct ProjectDocumentBatchView: View {
             }
             .sheet(item: $exportReview) { review in
                 ProjectDocumentExportView(projectName: review.projectName, documents: review.documents)
+            }
+            .sheet(item: $additionReview) { review in
+                ProjectReferenceAdditionView(projectID: projectID, profileID: profileID, initialDocumentIDs: review.documents.map(\.id))
             }
             .sheet(item: $deletionReview) { review in
                 ProjectDocumentDeletionReviewView(review: review) {

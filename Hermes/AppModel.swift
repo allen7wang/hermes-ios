@@ -410,6 +410,49 @@ final class AppModel: ObservableObject {
         try commitConversations(candidate)
     }
 
+    func previewProjectReferenceAddition(documentIDs: [UUID], conversationIDs: Set<UUID>,
+                                         projectID: UUID, profileID: UUID) throws -> ProjectReferenceAdditionReview {
+        try requireProjectAccess(profileID: profileID)
+        guard !documentIDs.isEmpty else { throw ProjectReferenceAdditionError.noDocuments }
+        guard !conversationIDs.isEmpty else { throw ProjectReferenceAdditionError.noConversations }
+        guard let project = projects.first(where: { $0.id == projectID }) else { throw ProjectError.missing }
+        let adding = try ProjectDocument.selected(ids: documentIDs, from: project)
+        let records = allConversations.filter { conversationIDs.contains($0.id) }
+        guard records.count == conversationIDs.count,
+              records.allSatisfy({ $0.profileID == profileID && $0.projectID == projectID }) else {
+            throw ProjectReferenceAdditionError.changed
+        }
+        var rows: [ProjectReferenceAddition.Row] = []
+        for record in records {
+            do { rows.append(try ProjectReferenceAddition.makeRow(record, adding: documentIDs, project: project, profileID: profileID)) }
+            catch { throw ProjectReferenceAdditionError.incompatibleConversation(title: record.title, reason: error.localizedDescription) }
+        }
+        guard rows.contains(where: \.hasChanges) else { throw ProjectReferenceAdditionError.alreadyReferenced }
+        rows.sort { first, second in
+            if first.status.order != second.status.order { return first.status.order < second.status.order }
+            return first.conversationID.uuidString < second.conversationID.uuidString
+        }
+        var involvedIDs = Set(documentIDs)
+        for row in rows { involvedIDs.formUnion(row.beforeIDs); involvedIDs.formUnion(row.afterIDs) }
+        let documents = project.documents.filter { involvedIDs.contains($0.id) }.sorted { $0.id.uuidString < $1.id.uuidString }
+        return ProjectReferenceAdditionReview(profileID: profileID, projectID: projectID, projectName: project.name,
+            addingDocuments: adding, documents: documents, rows: rows)
+    }
+
+    func applyProjectReferenceAddition(_ review: ProjectReferenceAdditionReview) throws {
+        let current = try previewProjectReferenceAddition(documentIDs: review.addingDocuments.map(\.id),
+            conversationIDs: Set(review.rows.map(\.conversationID)), projectID: review.projectID, profileID: review.profileID)
+        guard current.projectName == review.projectName, current.addingDocuments == review.addingDocuments,
+              current.documents == review.documents, current.rows == review.rows else { throw ProjectReferenceAdditionError.changed }
+        var candidate = allConversations
+        for row in current.rows where row.hasChanges {
+            guard let index = candidate.firstIndex(where: { $0.id == row.conversationID }) else { throw ProjectReferenceAdditionError.changed }
+            candidate[index].referenceDocumentIDs = row.afterIDs
+        }
+        // Validate the entire reviewed batch before saving; keep current messages and drafts.
+        try commitConversations(candidate)
+    }
+
     func selectProjectDocuments(_ ids: [UUID], conversationID: UUID, profileID: UUID,
                                 expectedSelection: [UUID]? = nil, expectedProjectID: UUID? = nil) throws {
         try requireProjectAccess(profileID: profileID)
