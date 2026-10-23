@@ -46,6 +46,7 @@ struct ProjectKnowledgeView: View {
     @State private var error: String?
     @State private var managing = false
     @State private var addingReferences = false
+    @State private var removingReferences = false
     @State private var usageFilter: ProjectDocumentUsageFilter = .all
     @State private var usageSort: ProjectDocumentUsageSort = .recent
 
@@ -101,6 +102,9 @@ struct ProjectKnowledgeView: View {
                             Button("批量添加对话引用", systemImage: "text.badge.plus") { addingReferences = true }
                                 .disabled(unavailable || documents.isEmpty || readingFile)
                                 .accessibilityIdentifier("knowledge-add-references")
+                            Button("批量移除对话引用", systemImage: "text.badge.minus") { removingReferences = true }
+                                .disabled(unavailable || documents.isEmpty || readingFile)
+                                .accessibilityIdentifier("knowledge-remove-references")
                             if documents.count >= ProjectDocument.collectionLimit || characterCount >= ProjectDocument.projectCharacterLimit {
                                 Text("资料库已达到数量或正文字符上限。可以编辑或删除已有资料，再添加新内容。")
                                     .font(.caption).foregroundStyle(.orange)
@@ -158,6 +162,9 @@ struct ProjectKnowledgeView: View {
         .sheet(isPresented: $addingReferences) {
             ProjectReferenceAdditionView(projectID: projectID, profileID: profileID)
         }
+        .sheet(isPresented: $removingReferences) {
+            ProjectReferenceRemovalView(projectID: projectID, profileID: profileID)
+        }
         .fileImporter(isPresented: $importing, allowedContentTypes: importTypes, allowsMultipleSelection: false) { result in
             importFile(result)
         }
@@ -167,7 +174,7 @@ struct ProjectKnowledgeView: View {
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .onAppear { viewActive = true }
         .onDisappear {
-            if !importing && editor == nil && !managing && !addingReferences {
+            if !importing && editor == nil && !managing && !addingReferences && !removingReferences {
                 viewActive = false
                 cancelImport()
             }
@@ -254,6 +261,7 @@ struct ProjectDocumentDetailView: View {
     @State private var deletionReview: ProjectDocumentDeletionReview?
     @State private var replacingReferences = false
     @State private var addingReferences = false
+    @State private var removingReferences = false
     @State private var copied = false
     @State private var exportedDocument: ConversationDocument?
     @State private var exporting = false
@@ -288,6 +296,8 @@ struct ProjectDocumentDetailView: View {
                             .disabled(unavailable).accessibilityIdentifier("knowledge-replace-references")
                         Button("为对话添加这篇引用", systemImage: "text.badge.plus") { addingReferences = true }
                             .disabled(unavailable).accessibilityIdentifier("knowledge-add-document-references")
+                        Button("从对话移除这篇引用", systemImage: "text.badge.minus") { removingReferences = true }
+                            .disabled(unavailable).accessibilityIdentifier("knowledge-remove-document-references")
                     } footer: {
                         Text("包括归档和回收站中的已保存选择。此处用于检查当前引用，不追溯历史请求。")
                     }.listRowBackground(HermesTheme.surface)
@@ -321,6 +331,9 @@ struct ProjectDocumentDetailView: View {
         }
         .sheet(isPresented: $addingReferences) {
             ProjectReferenceAdditionView(projectID: projectID, profileID: profileID, initialDocumentIDs: [documentID])
+        }
+        .sheet(isPresented: $removingReferences) {
+            ProjectReferenceRemovalView(projectID: projectID, profileID: profileID, initialDocumentIDs: [documentID])
         }
         .toolbar {
             if let document {

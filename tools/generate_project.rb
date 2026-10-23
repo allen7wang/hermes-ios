@@ -37,7 +37,7 @@ target.build_configurations.each do |configuration|
   settings['INFOPLIST_FILE'] = 'Hermes/Info.plist'
   settings['GENERATE_INFOPLIST_FILE'] = 'NO'
   settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
-  settings['MARKETING_VERSION'] = '3.7.0'
+  settings['MARKETING_VERSION'] = '3.8.0'
   settings['CURRENT_PROJECT_VERSION'] = '1'
   settings['CODE_SIGN_STYLE'] = 'Automatic'
   settings['ENABLE_PREVIEWS'] = 'YES'

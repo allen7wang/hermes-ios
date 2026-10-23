@@ -453,6 +453,49 @@ final class AppModel: ObservableObject {
         try commitConversations(candidate)
     }
 
+    func previewProjectReferenceRemoval(documentIDs: [UUID], conversationIDs: Set<UUID>,
+                                         projectID: UUID, profileID: UUID) throws -> ProjectReferenceRemovalReview {
+        try requireProjectAccess(profileID: profileID)
+        guard !documentIDs.isEmpty else { throw ProjectReferenceRemovalError.noDocuments }
+        guard !conversationIDs.isEmpty else { throw ProjectReferenceRemovalError.noConversations }
+        guard let project = projects.first(where: { $0.id == projectID }) else { throw ProjectError.missing }
+        let removing = try ProjectReferenceRemoval.selectedDocuments(documentIDs, in: project)
+        let records = allConversations.filter { conversationIDs.contains($0.id) }
+        guard records.count == conversationIDs.count,
+              records.allSatisfy({ $0.profileID == profileID && $0.projectID == projectID }) else {
+            throw ProjectReferenceRemovalError.changed
+        }
+        var rows: [ProjectReferenceRemoval.Row] = []
+        for record in records {
+            do { rows.append(try ProjectReferenceRemoval.makeRow(record, removing: documentIDs, project: project, profileID: profileID)) }
+            catch { throw ProjectReferenceRemovalError.incompatibleConversation(title: record.title, reason: error.localizedDescription) }
+        }
+        guard rows.contains(where: \.hasChanges) else { throw ProjectReferenceRemovalError.notReferenced }
+        rows.sort { first, second in
+            if first.status.order != second.status.order { return first.status.order < second.status.order }
+            return first.conversationID.uuidString < second.conversationID.uuidString
+        }
+        var involvedIDs = Set(documentIDs)
+        for row in rows { involvedIDs.formUnion(row.beforeIDs); involvedIDs.formUnion(row.afterIDs) }
+        let documents = project.documents.filter { involvedIDs.contains($0.id) }.sorted { $0.id.uuidString < $1.id.uuidString }
+        return ProjectReferenceRemovalReview(profileID: profileID, projectID: projectID, projectName: project.name,
+            removingDocuments: removing, documents: documents, rows: rows)
+    }
+
+    func applyProjectReferenceRemoval(_ review: ProjectReferenceRemovalReview) throws {
+        let current = try previewProjectReferenceRemoval(documentIDs: review.removingDocuments.map(\.id),
+            conversationIDs: Set(review.rows.map(\.conversationID)), projectID: review.projectID, profileID: review.profileID)
+        guard current.projectName == review.projectName, current.removingDocuments == review.removingDocuments,
+              current.documents == review.documents, current.rows == review.rows else { throw ProjectReferenceRemovalError.changed }
+        var candidate = allConversations
+        for row in current.rows where row.hasChanges {
+            guard let index = candidate.firstIndex(where: { $0.id == row.conversationID }) else { throw ProjectReferenceRemovalError.changed }
+            candidate[index].referenceDocumentIDs = row.afterIDs
+        }
+        // Validate the entire reviewed batch before saving; keep current messages and drafts.
+        try commitConversations(candidate)
+    }
+
     func selectProjectDocuments(_ ids: [UUID], conversationID: UUID, profileID: UUID,
                                 expectedSelection: [UUID]? = nil, expectedProjectID: UUID? = nil) throws {
         try requireProjectAccess(profileID: profileID)
