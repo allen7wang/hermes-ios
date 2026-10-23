@@ -28,6 +28,7 @@ struct MessageLibraryView: View {
     @State private var batchError: String?
     @State private var batchNotice: String?
     @State private var quotedBatch: MessageDraftQuoteSnapshot?
+    @State private var knowledgeBatch: MessageLibraryBatchSnapshot?
 
     init(embedded: Bool = false, onShowDraft: (() -> Void)? = nil,
          onOpen: @escaping (LocalMessageTarget) -> Void, selecting: Bool = false) {
@@ -141,9 +142,12 @@ struct MessageLibraryView: View {
                         Button { prepareQuote() } label: { Label("引用到草稿", systemImage: "text.quote") }
                             .accessibilityIdentifier("library-batch-quote")
                         Menu {
+                            Button { prepareKnowledgeCapture() } label: { Label("存为项目资料", systemImage: "text.book.closed") }
+                                .accessibilityIdentifier("library-batch-capture")
+                            Divider()
                             Button { prepareBatch(operation: .add) } label: { Label("收藏所选消息", systemImage: "bookmark") }
                             Button(role: .destructive) { prepareBatch(operation: .remove) } label: { Label("取消所选收藏", systemImage: "bookmark.slash") }
-                        } label: { Label("收藏", systemImage: "bookmark") }
+                        } label: { Label("更多", systemImage: "ellipsis.circle") }
                     }.font(.subheadline).buttonStyle(.bordered).frame(maxWidth: .infinity)
                         .padding(12).background(HermesTheme.surface)
                         .disabled(selection.isEmpty || model.needsRecovery)
@@ -203,6 +207,12 @@ struct MessageLibraryView: View {
             }
         }
         .sheet(item: $exportedBatch) { snapshot in MessageLibraryBatchExportView(snapshot: snapshot) }
+        .sheet(item: $knowledgeBatch) { source in
+            MessageProjectCapturePickerView(source: source) { _ in
+                selection = []
+                batchNotice = "已新增项目资料，未自动引用或发送"
+            }
+        }
         .sheet(item: $quotedBatch) { snapshot in
             MessageDraftQuoteReviewView(snapshot: snapshot, onApplied: {
                 selection = []
@@ -262,6 +272,11 @@ struct MessageLibraryView: View {
 
     private func prepareQuote() {
         do { quotedBatch = try model.makeMessageDraftQuote(Array(selection), profileID: model.activeProfileID) }
+        catch { batchError = error.localizedDescription }
+    }
+
+    private func prepareKnowledgeCapture() {
+        do { knowledgeBatch = try model.makeMessageLibraryBatch(Array(selection), profileID: model.activeProfileID) }
         catch { batchError = error.localizedDescription }
     }
 }

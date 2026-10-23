@@ -521,6 +521,29 @@ final class AppModel: ObservableObject {
         return try ProjectDocumentCapture(message: message, conversation: conversation, profileID: profileID)
     }
 
+    func prepareMessageProjectCapture(source: MessageLibraryBatchSnapshot, projectID: UUID) throws -> MessageProjectCapture {
+        try requireProjectAccess(profileID: source.profileID)
+        let current = try makeMessageLibraryBatch(source.items.map(\.id), profileID: source.profileID)
+        guard current.profileName == source.profileName, current.items == source.items else { throw MessageProjectCaptureError.changed }
+        guard source.items.contains(where: { !$0.message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            throw MessageProjectCaptureError.noText
+        }
+        guard let project = projects.first(where: { $0.id == projectID }) else { throw ProjectError.missing }
+        return MessageProjectCapture(source: source, project: project)
+    }
+
+    func validateMessageProjectCapture(_ capture: MessageProjectCapture) throws {
+        let current = try prepareMessageProjectCapture(source: capture.source, projectID: capture.project.id)
+        guard current.project == capture.project else { throw MessageProjectCaptureError.changed }
+    }
+
+    @discardableResult
+    func saveMessageProjectCapture(_ capture: MessageProjectCapture, title: String, body: String) throws -> UUID {
+        try validateMessageProjectCapture(capture)
+        return try saveProjectDocument(id: nil, projectID: capture.project.id, title: title,
+            body: body, profileID: capture.source.profileID)
+    }
+
     private func commitProjectProfiles(_ candidate: [ConnectionProfile]) throws {
         let library = ConnectionLibrary(profiles: candidate, activeID: activeProfileID, selectedConversations: selectedConversations)
         let data = try JSONEncoder().encode(library)
