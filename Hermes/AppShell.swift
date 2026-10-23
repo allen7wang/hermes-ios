@@ -25,7 +25,11 @@ struct AppShell: View {
             }.tabItem { Label("项目", systemImage: "folder") }.tag(Section.projects)
             RemoteWorkspaceView(embedded: true)
                 .tabItem { Label("服务端", systemImage: "server.rack") }.tag(Section.server)
-            MessageLibraryView(embedded: true) { target in
+            MessageLibraryView(embedded: true, onShowDraft: {
+                libraryTarget = nil
+                section = .conversations
+                showingChat = true
+            }) { target in
                 do {
                     try model.openMessage(target)
                     libraryTarget = target

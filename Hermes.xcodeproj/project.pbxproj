@@ -30,6 +30,7 @@
 		3346F6241C50C7DAB838D4C2 /* ChatTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50454D58F18B2420F79E7436 /* ChatTimeline.swift */; };
 		33C705978A0BB69221715CF9 /* MessageLibraryBatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B961B487C0D6FC8FB7E8A58F /* MessageLibraryBatchTests.swift */; };
 		34101B363EC4319E31979448 /* ProjectReferenceAdditionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2CE03AEC4FDEE5E65FB41F /* ProjectReferenceAdditionView.swift */; };
+		347DE39D5059F78DEF533CCF /* MessageDraftQuoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7DFCB032F5E6871806F5BD /* MessageDraftQuoteTests.swift */; };
 		35E40C189B7DAD19615D9007 /* HermesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01440E4DB1FAFBF6B192E691 /* HermesClient.swift */; };
 		37E06642754314784243D2EF /* DraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3DDB0149B8B7C3DE5C1542 /* DraftStore.swift */; };
 		38AF0667049395E84565DF09 /* WorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A6E570BFEAA95C3FDA6D21 /* WorkspaceTests.swift */; };
@@ -53,6 +54,7 @@
 		67256927406DE2D62C32319D /* ProjectReferenceReplacementVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D04D83C8333274351B868F5 /* ProjectReferenceReplacementVisualTests.swift */; };
 		69B9CD0816E1A31B754D752D /* ConnectionProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B6408748EE751804A8BE46 /* ConnectionProfile.swift */; };
 		6C5052CABEE67AC2904ECACF /* MessageLibraryBatchVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 296ADF57D7772EA7F09200B5 /* MessageLibraryBatchVisualTests.swift */; };
+		721BBB7E7969EDFEBB14F360 /* MessageDraftQuoteModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F009B450BB5442C8C2248FB /* MessageDraftQuoteModelTests.swift */; };
 		752BFAABB47BDAC3380A44FB /* ConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC847C5D0869EF644B706EE4 /* ConnectionTests.swift */; };
 		7B06E3777F973BC9128FB3F9 /* RemoteTimestamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D603EB8935436D9B4C263C /* RemoteTimestamp.swift */; };
 		80405E8F0E8608BCEB647FA8 /* ConversationWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60DCF367C18FAB5FB59387E /* ConversationWorkspace.swift */; };
@@ -60,6 +62,7 @@
 		842FEC841DB5C4C81A1EAA22 /* SessionStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FFE4F80A2E75F738D1DF742 /* SessionStream.swift */; };
 		84CDAF14A6A4444B1A80A955 /* ProjectDocumentUsageModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0874ACBA2373EF4347CFAD /* ProjectDocumentUsageModelTests.swift */; };
 		8617CFA140D2B6D6D3DC2627 /* MarkdownTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BCA0161E454C8198C086E0 /* MarkdownTheme.swift */; };
+		884ADC375DB6B615AAF33614 /* MessageDraftQuote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73245D4E83589B2AC97694FA /* MessageDraftQuote.swift */; };
 		898A2169D3EAEA49966B6938 /* HermesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4CFD5BA3BED7770588BF6A /* HermesApp.swift */; };
 		915D3952B7BB071CA41223DB /* MessageContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A32442E9B2DE079A5A238DA /* MessageContentView.swift */; };
 		933FA5681A7CE170328F384D /* ProjectWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5B4D367A5BEEA955D241B37 /* ProjectWorkspaceView.swift */; };
@@ -88,7 +91,9 @@
 		DEB8FE59F7BB4EB2272A4A51 /* ImageAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBD391E83201FBC04493109 /* ImageAttachmentStore.swift */; };
 		E00EF5C7EAC07917A2FAC7AD /* MessageLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F5AFE2A428A941890BF9D6 /* MessageLibraryTests.swift */; };
 		E10728EE25B61814E98A5507 /* RemoteWorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5BB7DAB23310BB37C5EBC91 /* RemoteWorkspaceModel.swift */; };
+		E23596736FD2D6C335C64A71 /* MessageDraftQuoteVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98BD509E338798DCF310FD5 /* MessageDraftQuoteVisualTests.swift */; };
 		E817669049A47B16C50B1B9C /* ProjectDocumentBatchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844AE207E3976F14927F4230 /* ProjectDocumentBatchView.swift */; };
+		EAAD00F925321B1F5FB5817F /* MessageDraftQuoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55543390F40BAC1E187AEC9A /* MessageDraftQuoteView.swift */; };
 		EBA113B69CE06CA9E524D3C6 /* EditMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3559963B9B7837D4AD38C56 /* EditMessageView.swift */; };
 		EC2CB907ED9EC2A11F064874 /* RemoteWorkspaceSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9789B92F9D5CC6FDB28E205 /* RemoteWorkspaceSupport.swift */; };
 		EDF0C4FF53382F6F5131945F /* MessageLibraryBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = B549C77A4BFCE38FAA594A9E /* MessageLibraryBatch.swift */; };
@@ -147,6 +152,7 @@
 		4B2257FB47920DF48A15BC72 /* ProjectReferenceReplacementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectReferenceReplacementView.swift; sourceTree = "<group>"; };
 		4FFA3EDAAF6A04F3B595630C /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50454D58F18B2420F79E7436 /* ChatTimeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatTimeline.swift; sourceTree = "<group>"; };
+		55543390F40BAC1E187AEC9A /* MessageDraftQuoteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDraftQuoteView.swift; sourceTree = "<group>"; };
 		5A32442E9B2DE079A5A238DA /* MessageContentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageContentView.swift; sourceTree = "<group>"; };
 		5D54B416F25124FAC90C8A3B /* BackupTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupTests.swift; sourceTree = "<group>"; };
 		5DF1FF3D7FD619A795135EBC /* LocalProject.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalProject.swift; sourceTree = "<group>"; };
@@ -157,6 +163,7 @@
 		6737EA7FCBE1379A6801085F /* ProjectDocumentUsage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentUsage.swift; sourceTree = "<group>"; };
 		6D0C51F4AE0B859BEC48115E /* MessageSearchView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageSearchView.swift; sourceTree = "<group>"; };
 		6D710BBDF22927DEC3076803 /* ProjectKnowledgeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectKnowledgeView.swift; sourceTree = "<group>"; };
+		73245D4E83589B2AC97694FA /* MessageDraftQuote.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDraftQuote.swift; sourceTree = "<group>"; };
 		7A3DDB0149B8B7C3DE5C1542 /* DraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DraftStore.swift; sourceTree = "<group>"; };
 		7A939A91DE145C2410DAA7DA /* RemoteModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteModels.swift; sourceTree = "<group>"; };
 		7D04D83C8333274351B868F5 /* ProjectReferenceReplacementVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectReferenceReplacementVisualTests.swift; sourceTree = "<group>"; };
@@ -170,6 +177,7 @@
 		8FFE4F80A2E75F738D1DF742 /* SessionStream.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStream.swift; sourceTree = "<group>"; };
 		95D0C06B92D616CA4572ACB3 /* MessageLibraryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageLibraryView.swift; sourceTree = "<group>"; };
 		978596CE1088B787E74B285E /* SettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		9F009B450BB5442C8C2248FB /* MessageDraftQuoteModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDraftQuoteModelTests.swift; sourceTree = "<group>"; };
 		A0F5AFE2A428A941890BF9D6 /* MessageLibraryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageLibraryTests.swift; sourceTree = "<group>"; };
 		A3559963B9B7837D4AD38C56 /* EditMessageView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditMessageView.swift; sourceTree = "<group>"; };
 		A741AE4C88D2E608E15F3796 /* MessageContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageContent.swift; sourceTree = "<group>"; };
@@ -183,6 +191,7 @@
 		B97F3C054E4813987FB44410 /* ProjectReferenceAdditionVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectReferenceAdditionVisualTests.swift; sourceTree = "<group>"; };
 		BAC952520B8E67B4038064FB /* BackupView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
 		BC847C5D0869EF644B706EE4 /* ConnectionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConnectionTests.swift; sourceTree = "<group>"; };
+		BE7DFCB032F5E6871806F5BD /* MessageDraftQuoteTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDraftQuoteTests.swift; sourceTree = "<group>"; };
 		BF3DA49D038AFB30F8E73279 /* ProjectDocumentUsageView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentUsageView.swift; sourceTree = "<group>"; };
 		C0722B05FB0448A9032EFBDA /* RemoteSessionDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteSessionDetailView.swift; sourceTree = "<group>"; };
 		C2043DC8C97A0CF5484A730B /* ProjectDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectDocumentTests.swift; sourceTree = "<group>"; };
@@ -206,6 +215,7 @@
 		F103E1FAD249F946109D6584 /* HistoryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		F416E4723638FC541FD4E379 /* ChatContextPreview.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatContextPreview.swift; sourceTree = "<group>"; };
 		F619CAF95F1F3614F20BDFE3 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F98BD509E338798DCF310FD5 /* MessageDraftQuoteVisualTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDraftQuoteVisualTests.swift; sourceTree = "<group>"; };
 		FD29248238E1FB60EA9F1B9E /* ProjectReferenceReplacementTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectReferenceReplacementTests.swift; sourceTree = "<group>"; };
 		FFDBC33F6E85DE9D8A539338 /* StreamingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StreamingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -313,6 +323,8 @@
 				1533ACFDC5B9E7129971BB1F /* MessageLibraryBatchView.swift */,
 				04AC95FA5CEE281590C2E216 /* ProjectReferenceAddition.swift */,
 				0E2CE03AEC4FDEE5E65FB41F /* ProjectReferenceAdditionView.swift */,
+				73245D4E83589B2AC97694FA /* MessageDraftQuote.swift */,
+				55543390F40BAC1E187AEC9A /* MessageDraftQuoteView.swift */,
 			);
 			name = Hermes;
 			path = Hermes;
@@ -359,6 +371,9 @@
 				296ADF57D7772EA7F09200B5 /* MessageLibraryBatchVisualTests.swift */,
 				B3C6FD51870CE5BBFB6E6B6F /* ProjectReferenceAdditionTests.swift */,
 				B97F3C054E4813987FB44410 /* ProjectReferenceAdditionVisualTests.swift */,
+				9F009B450BB5442C8C2248FB /* MessageDraftQuoteModelTests.swift */,
+				BE7DFCB032F5E6871806F5BD /* MessageDraftQuoteTests.swift */,
+				F98BD509E338798DCF310FD5 /* MessageDraftQuoteVisualTests.swift */,
 			);
 			name = HermesTests;
 			path = HermesTests;
@@ -530,6 +545,8 @@
 				5BAA06EB88677C9006A30DD0 /* MessageLibraryBatchView.swift in Sources */,
 				2B25B5EF71DBBB68D55C3F17 /* ProjectReferenceAddition.swift in Sources */,
 				34101B363EC4319E31979448 /* ProjectReferenceAdditionView.swift in Sources */,
+				884ADC375DB6B615AAF33614 /* MessageDraftQuote.swift in Sources */,
+				EAAD00F925321B1F5FB5817F /* MessageDraftQuoteView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -567,6 +584,9 @@
 				6C5052CABEE67AC2904ECACF /* MessageLibraryBatchVisualTests.swift in Sources */,
 				5A6A3ED65CDAD474AADB0B31 /* ProjectReferenceAdditionTests.swift in Sources */,
 				9D9CE75F88F24AAF0A1D9662 /* ProjectReferenceAdditionVisualTests.swift in Sources */,
+				721BBB7E7969EDFEBB14F360 /* MessageDraftQuoteModelTests.swift in Sources */,
+				347DE39D5059F78DEF533CCF /* MessageDraftQuoteTests.swift in Sources */,
+				E23596736FD2D6C335C64A71 /* MessageDraftQuoteVisualTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -613,7 +633,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.6.0;
+				MARKETING_VERSION = 3.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;
@@ -711,7 +731,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.6.0;
+				MARKETING_VERSION = 3.7.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.a7w.hermes;
 				PRODUCT_NAME = Hermes;
 				SDKROOT = iphoneos;

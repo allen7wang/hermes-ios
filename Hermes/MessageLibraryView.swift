@@ -12,6 +12,7 @@ struct MessageLibraryView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let onOpen: (LocalMessageTarget) -> Void
+    let onShowDraft: (() -> Void)?
     @State private var query = ""
     @State private var filter: MessageLibraryFilter = .bookmarks
     @State private var role: MessageLibraryRole = .all
@@ -26,9 +27,12 @@ struct MessageLibraryView: View {
     @State private var bookmarkBatch: MessageLibraryBookmarkBatchRoute?
     @State private var batchError: String?
     @State private var batchNotice: String?
+    @State private var quotedBatch: MessageDraftQuoteSnapshot?
 
-    init(embedded: Bool = false, onOpen: @escaping (LocalMessageTarget) -> Void, selecting: Bool = false) {
+    init(embedded: Bool = false, onShowDraft: (() -> Void)? = nil,
+         onOpen: @escaping (LocalMessageTarget) -> Void, selecting: Bool = false) {
         self.embedded = embedded
+        self.onShowDraft = onShowDraft
         self.onOpen = onOpen
         _selecting = State(initialValue: selecting)
     }
@@ -134,8 +138,12 @@ struct MessageLibraryView: View {
                 if selecting {
                     HStack(spacing: 8) {
                         Button { prepareBatch(operation: nil) } label: { Label("导出", systemImage: "square.and.arrow.up") }
-                        Button { prepareBatch(operation: .add) } label: { Label("收藏", systemImage: "bookmark") }
-                        Button(role: .destructive) { prepareBatch(operation: .remove) } label: { Label("取消收藏", systemImage: "bookmark.slash") }
+                        Button { prepareQuote() } label: { Label("引用到草稿", systemImage: "text.quote") }
+                            .accessibilityIdentifier("library-batch-quote")
+                        Menu {
+                            Button { prepareBatch(operation: .add) } label: { Label("收藏所选消息", systemImage: "bookmark") }
+                            Button(role: .destructive) { prepareBatch(operation: .remove) } label: { Label("取消所选收藏", systemImage: "bookmark.slash") }
+                        } label: { Label("收藏", systemImage: "bookmark") }
                     }.font(.subheadline).buttonStyle(.bordered).frame(maxWidth: .infinity)
                         .padding(12).background(HermesTheme.surface)
                         .disabled(selection.isEmpty || model.needsRecovery)
@@ -195,6 +203,14 @@ struct MessageLibraryView: View {
             }
         }
         .sheet(item: $exportedBatch) { snapshot in MessageLibraryBatchExportView(snapshot: snapshot) }
+        .sheet(item: $quotedBatch) { snapshot in
+            MessageDraftQuoteReviewView(snapshot: snapshot, onApplied: {
+                selection = []
+                batchNotice = "已将 \(snapshot.source.items.count) 条消息引用保存到「\(snapshot.destination.title)」的草稿，尚未发送"
+            }, onShowDraft: {
+                if let onShowDraft { onShowDraft() } else { dismiss() }
+            })
+        }
         .sheet(item: $bookmarkBatch) { route in
             MessageLibraryBookmarkReviewView(snapshot: route.snapshot, operation: route.operation) { report in
                 bookmarkBatch = nil; selection = []
@@ -242,6 +258,11 @@ struct MessageLibraryView: View {
             if let operation { bookmarkBatch = MessageLibraryBookmarkBatchRoute(snapshot: snapshot, operation: operation) }
             else { exportedBatch = snapshot }
         } catch { batchError = error.localizedDescription }
+    }
+
+    private func prepareQuote() {
+        do { quotedBatch = try model.makeMessageDraftQuote(Array(selection), profileID: model.activeProfileID) }
+        catch { batchError = error.localizedDescription }
     }
 }
 

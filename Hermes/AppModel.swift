@@ -805,6 +805,39 @@ final class AppModel: ObservableObject {
         draft = next
     }
 
+    private func messageDraftQuoteDestination() throws -> MessageDraftQuoteDestination {
+        if let id = selectedID {
+            guard let conversation = selectedConversation, conversation.id == id else { throw MessageDraftQuoteError.changed }
+            guard !conversation.isArchived else { throw MessageDraftQuoteError.archivedDestination }
+            return MessageDraftQuoteDestination(conversationID: id, title: conversation.title,
+                projectID: conversation.projectID, projectName: project(for: conversation)?.name)
+        }
+        return MessageDraftQuoteDestination(conversationID: nil, title: "新对话", projectID: nil, projectName: nil)
+    }
+
+    func makeMessageDraftQuote(_ targets: [LocalMessageTarget], profileID: UUID) throws -> MessageDraftQuoteSnapshot {
+        let source = try makeMessageLibraryBatch(targets, profileID: profileID)
+        return MessageDraftQuoteSnapshot(source: source, draftKey: draftKey,
+            destination: try messageDraftQuoteDestination(), draftText: draft)
+    }
+
+    func validateMessageDraftQuote(_ snapshot: MessageDraftQuoteSnapshot) throws {
+        let current = try makeMessageLibraryBatch(snapshot.source.items.map(\.id), profileID: snapshot.source.profileID)
+        guard current.profileName == snapshot.source.profileName, current.items == snapshot.source.items,
+              snapshot.draftKey == draftKey, snapshot.draftText == draft,
+              snapshot.destination == (try messageDraftQuoteDestination()) else { throw MessageDraftQuoteError.changed }
+    }
+
+    func applyMessageDraftQuote(_ snapshot: MessageDraftQuoteSnapshot, mode: PromptDraftMode) throws {
+        try validateMessageDraftQuote(snapshot)
+        let reference = try MessageDraftQuote.referenceText(snapshot.source)
+        let next = try MessageDraftQuote.draft(current: snapshot.draftText, reference: reference, mode: mode)
+        try draftStore.set(next, for: snapshot.draftKey)
+        draftAlreadyPersisted = true
+        defer { draftAlreadyPersisted = false }
+        draft = next
+    }
+
     var promptTemplates: [PromptTemplate] { profiles.first { $0.id == activeProfileID }?.templates ?? [] }
 
     @discardableResult
