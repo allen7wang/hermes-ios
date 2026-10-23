@@ -671,7 +671,47 @@ final class AppModel: ObservableObject {
         guard let conversation = conversations.first(where: { $0.id == target.conversationID }),
               let message = conversation.messages.first(where: { $0.id == target.messageID }) else { return nil }
         return MessageLibraryItem(id: target, conversationTitle: conversation.title, message: message,
-                                  conversationTags: conversation.workspaceState.tags, conversationArchived: conversation.isArchived)
+                                  conversationTags: conversation.workspaceState.tags, conversationArchived: conversation.isArchived,
+                                  projectName: project(for: conversation)?.name, projectID: conversation.projectID)
+    }
+
+    func makeMessageLibraryBatch(_ targets: [LocalMessageTarget], profileID: UUID) throws -> MessageLibraryBatchSnapshot {
+        guard !needsRecovery else { throw ProfileError.storageUnavailable }
+        guard activeProfileID == profileID, profiles.contains(where: { $0.id == profileID }) else { throw MessageLibraryBatchError.changed }
+        guard !targets.isEmpty else { throw MessageLibraryBatchError.empty }
+        guard targets.count <= MessageLibraryBatch.selectionLimit else { throw MessageLibraryBatchError.selectionLimit }
+        guard Set(targets).count == targets.count else { throw MessageLibraryBatchError.duplicates }
+        var items: [MessageLibraryItem] = []
+        for target in targets {
+            guard let item = libraryItem(target) else { throw MessageLibraryBatchError.changed }
+            items.append(item)
+        }
+        try MessageLibraryBatch.validate(items)
+        return MessageLibraryBatchSnapshot(profileID: profileID, profileName: activeProfileName,
+            items: MessageLibraryBatch.ordered(items))
+    }
+
+    @discardableResult
+    func changeMessageLibraryBookmarks(_ snapshot: MessageLibraryBatchSnapshot,
+                                       operation: MessageLibraryBatchOperation) throws -> MessageLibraryBatchReport {
+        let current = try makeMessageLibraryBatch(snapshot.items.map(\.id), profileID: snapshot.profileID)
+        guard current.profileName == snapshot.profileName, current.items == snapshot.items else { throw MessageLibraryBatchError.changed }
+        let report = MessageLibraryBatch.report(current.items, operation: operation)
+        guard report.changed > 0 else { return report }
+        var candidate = allConversations
+        let now = Date()
+        for item in current.items {
+            guard let index = candidate.firstIndex(where: { $0.id == item.id.conversationID && $0.profileID == snapshot.profileID && !$0.isTrashed }),
+                  let messageIndex = candidate[index].messages.firstIndex(where: { $0.id == item.id.messageID }) else { throw MessageLibraryBatchError.changed }
+            if operation == .add {
+                if candidate[index].messages[messageIndex].bookmark == nil {
+                    candidate[index].messages[messageIndex].bookmark = MessageBookmark(createdAt: now, note: "")
+                }
+            } else { candidate[index].messages[messageIndex].bookmark = nil }
+        }
+        // One atomic save keeps unrelated incoming messages and every composer state intact.
+        try commitConversations(candidate)
+        return report
     }
 
     func toggleBookmark(_ target: LocalMessageTarget) throws {

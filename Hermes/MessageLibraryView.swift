@@ -1,6 +1,12 @@
 import SwiftUI
 import UIKit
 
+private struct MessageLibraryBookmarkBatchRoute: Identifiable {
+    let id = UUID()
+    let snapshot: MessageLibraryBatchSnapshot
+    let operation: MessageLibraryBatchOperation
+}
+
 struct MessageLibraryView: View {
     var embedded = false
     @EnvironmentObject private var model: AppModel
@@ -14,8 +20,21 @@ struct MessageLibraryView: View {
     @State private var scope: MessageLibraryScope = .all
     @State private var tag: String?
     @State private var project: ProjectFilter = .all
+    @State private var selecting: Bool
+    @State private var selection: Set<LocalMessageTarget> = []
+    @State private var exportedBatch: MessageLibraryBatchSnapshot?
+    @State private var bookmarkBatch: MessageLibraryBookmarkBatchRoute?
+    @State private var batchError: String?
+    @State private var batchNotice: String?
+
+    init(embedded: Bool = false, onOpen: @escaping (LocalMessageTarget) -> Void, selecting: Bool = false) {
+        self.embedded = embedded
+        self.onOpen = onOpen
+        _selecting = State(initialValue: selecting)
+    }
 
     private struct QueryRequest: Equatable {
+        let profileID: UUID
         let conversations: [Conversation]
         let query: String
         let filter: MessageLibraryFilter
@@ -27,7 +46,7 @@ struct MessageLibraryView: View {
     }
 
     private var request: QueryRequest {
-        QueryRequest(conversations: model.conversations, query: query, filter: filter, role: role, scope: scope, tag: tag, project: project, projects: model.projects)
+        QueryRequest(profileID: model.activeProfileID, conversations: model.conversations, query: query, filter: filter, role: role, scope: scope, tag: tag, project: project, projects: model.projects)
     }
     private var projectLabel: String {
         switch project {
@@ -58,6 +77,26 @@ struct MessageLibraryView: View {
                             Button("清除筛选") { scope = .all; role = .all; tag = nil; project = .all }.font(.caption)
                         }
                     }
+                    if selecting {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("已选 \(selection.count) / \(MessageLibraryBatch.selectionLimit) 条").font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Button("清空选择") { selection = []; batchNotice = nil }.font(.caption).disabled(selection.isEmpty)
+                            }
+                            let visibleIDs = Set(results.map(\.id))
+                            let hidden = selection.subtracting(visibleIDs).count
+                            if hidden > 0 { Text("其中 \(hidden) 条被搜索或筛选隐藏，仍会纳入操作。").font(.caption).foregroundStyle(.orange) }
+                            Button(!visibleIDs.isEmpty && visibleIDs.isSubset(of: selection) ? "取消选择当前结果" : "选择当前结果") {
+                                selectVisible()
+                            }.font(.subheadline).disabled(searching || results.isEmpty || model.needsRecovery)
+                                .accessibilityIdentifier("library-batch-select-visible")
+                            Text("检查最多 100 条、500,000 个正文与备注等文字字符；超限会提示，保留完整内容。")
+                                .font(.caption2).foregroundStyle(HermesTheme.muted)
+                        }.foregroundStyle(HermesTheme.accent).accessibilityIdentifier("library-batch-selection")
+                    }
+                    if model.needsRecovery { Text("本机数据需要恢复，批量整理暂不可用。").font(.caption).foregroundStyle(.orange) }
+                    if let batchNotice { Label(batchNotice, systemImage: "checkmark.circle").font(.caption).foregroundStyle(.green) }
                 }.padding(16)
                 if results.isEmpty {
                     if searching { ProgressView("正在查找…").frame(maxHeight: .infinity) }
@@ -70,12 +109,37 @@ struct MessageLibraryView: View {
                     }
                 } else {
                     List(results) { item in
-                        NavigationLink(value: item.id) { MessageLibraryRow(item: item, query: query) }
-                            .accessibilityIdentifier("library-row-\(item.id.id)")
-                            .listRowBackground(HermesTheme.surface)
+                        Group {
+                            if selecting {
+                                Button { toggleSelection(item.id) } label: {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Image(systemName: selection.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(HermesTheme.accent).padding(.top, 9)
+                                        MessageLibraryRow(item: item, query: query)
+                                    }.contentShape(Rectangle())
+                                }.buttonStyle(.plain).disabled(model.needsRecovery)
+                                    .accessibilityLabel("\(item.conversationTitle)，\(item.roleLabel)，\(selection.contains(item.id) ? "已选择" : "未选择")")
+                                    .accessibilityIdentifier("library-batch-row-\(item.id.id)")
+                            } else {
+                                NavigationLink(value: item.id) { MessageLibraryRow(item: item, query: query) }
+                                    .accessibilityIdentifier("library-row-\(item.id.id)")
+                            }
+                        }.listRowBackground(HermesTheme.surface)
                     }
                     .scrollContentBackground(.hidden)
                     .disabled(searching)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if selecting {
+                    HStack(spacing: 8) {
+                        Button { prepareBatch(operation: nil) } label: { Label("导出", systemImage: "square.and.arrow.up") }
+                        Button { prepareBatch(operation: .add) } label: { Label("收藏", systemImage: "bookmark") }
+                        Button(role: .destructive) { prepareBatch(operation: .remove) } label: { Label("取消收藏", systemImage: "bookmark.slash") }
+                    }.font(.subheadline).buttonStyle(.bordered).frame(maxWidth: .infinity)
+                        .padding(12).background(HermesTheme.surface)
+                        .disabled(selection.isEmpty || model.needsRecovery)
+                        .accessibilityIdentifier("library-batch-actions")
                 }
             }
             .background(HermesTheme.background)
@@ -102,6 +166,11 @@ struct MessageLibraryView: View {
             .toolbar {
                 if !embedded { ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } } }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button(selecting ? "完成多选" : "多选") {
+                        selecting.toggle(); selection = []; batchNotice = nil
+                    }.disabled(model.needsRecovery && !selecting).accessibilityIdentifier("library-batch-toggle")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Picker("所属项目", selection: $project) {
                             Text("全部项目").tag(ProjectFilter.all)
@@ -125,12 +194,54 @@ struct MessageLibraryView: View {
                 }
             }
         }
+        .sheet(item: $exportedBatch) { snapshot in MessageLibraryBatchExportView(snapshot: snapshot) }
+        .sheet(item: $bookmarkBatch) { route in
+            MessageLibraryBookmarkReviewView(snapshot: route.snapshot, operation: route.operation) { report in
+                bookmarkBatch = nil; selection = []
+                batchNotice = "已\(route.operation == .add ? "收藏" : "取消收藏") \(report.changed) 条，\(report.unchanged) 条无需变更"
+            }
+        }
+        .alert("消息批量操作暂不可用", isPresented: Binding(get: { batchError != nil }, set: { if !$0 { batchError = nil } })) {
+            Button("知道了", role: .cancel) { batchError = nil }
+        } message: { Text(batchError ?? "") }
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .onChange(of: availableTags) { _, values in if let tag, !values.contains(tag) { self.tag = nil } }
-        .onChange(of: model.activeProfileID) { _, _ in query = ""; scope = .all; role = .all; tag = nil; project = .all }
+        .onChange(of: model.activeProfileID) { _, _ in
+            query = ""; scope = .all; role = .all; tag = nil; project = .all
+            selection = []; selecting = false; batchNotice = nil; results = []; searching = true
+        }
+        .onChange(of: model.conversations) { _, _ in
+            selection = Set(selection.filter { model.libraryItem($0) != nil })
+        }
         .onChange(of: model.projects.map(\.id)) { _, ids in
             if case .project(let id) = project, !ids.contains(id) { project = .all }
         }
+    }
+
+    private func toggleSelection(_ target: LocalMessageTarget) {
+        if selection.contains(target) { selection.remove(target) }
+        else {
+            guard selection.count < MessageLibraryBatch.selectionLimit else { batchError = MessageLibraryBatchError.selectionLimit.localizedDescription; return }
+            selection.insert(target)
+        }
+        batchNotice = nil
+    }
+    private func selectVisible() {
+        let ids = Set(results.map(\.id))
+        if ids.isSubset(of: selection) { selection.subtract(ids) }
+        else {
+            let next = selection.union(ids)
+            guard next.count <= MessageLibraryBatch.selectionLimit else { batchError = "当前结果加已选内容超过 100 条，请缩小筛选范围或逐条选择。"; return }
+            selection = next
+        }
+        batchNotice = nil
+    }
+    private func prepareBatch(operation: MessageLibraryBatchOperation?) {
+        do {
+            let snapshot = try model.makeMessageLibraryBatch(Array(selection), profileID: model.activeProfileID)
+            if let operation { bookmarkBatch = MessageLibraryBookmarkBatchRoute(snapshot: snapshot, operation: operation) }
+            else { exportedBatch = snapshot }
+        } catch { batchError = error.localizedDescription }
     }
 }
 

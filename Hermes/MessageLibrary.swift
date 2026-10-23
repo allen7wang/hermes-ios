@@ -13,6 +13,7 @@ struct MessageLibraryItem: Identifiable, Equatable {
     var conversationTags: [String] = []
     var conversationArchived = false
     var projectName: String? = nil
+    var projectID: UUID? = nil
     var roleLabel: String { message.role == .assistant ? "Hermes" : "我" }
     var preview: String {
         message.content.isEmpty && message.imageID != nil ? "[图片]" : String(message.content.prefix(160))
@@ -61,7 +62,8 @@ enum MessageLibrary {
                 }) else { return nil }
                 return MessageLibraryItem(id: LocalMessageTarget(conversationID: conversation.id, messageID: message.id),
                                           conversationTitle: conversation.title, message: message,
-                                          conversationTags: conversation.workspaceState.tags, conversationArchived: conversation.isArchived, projectName: projectName)
+                                          conversationTags: conversation.workspaceState.tags, conversationArchived: conversation.isArchived,
+                                          projectName: projectName, projectID: conversation.projectID)
             }
         }
         guard !Task.isCancelled else { return [] }
