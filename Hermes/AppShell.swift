@@ -11,13 +11,13 @@ struct AppShell: View {
     var body: some View {
         TabView(selection: $section) {
             NavigationStack {
-                HistoryView(embedded: true) { libraryTarget = nil; showingChat = true }
+                WorkspaceHomeView { target in libraryTarget = target; showingChat = true }
                     .navigationDestination(isPresented: $showingChat) {
                         ChatView(initialTarget: libraryTarget)
                             .toolbar(.hidden, for: .navigationBar)
                             .toolbar(.hidden, for: .tabBar)
                     }
-            }.tabItem { Label("对话", systemImage: "bubble.left.and.bubble.right") }.tag(Section.conversations)
+            }.id(model.activeProfileID).tabItem { Label("工作台", systemImage: "square.grid.2x2") }.tag(Section.conversations)
             ProjectWorkspaceView(embedded: true) {
                 libraryTarget = nil
                 section = .conversations

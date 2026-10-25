@@ -105,7 +105,7 @@ enum ConversationWorkbench {
 }
 
 enum WorkspaceError: LocalizedError {
-    case missing, busy, archived, invalidTags, invalidConfiguration, changedContext
+    case missing, busy, archived, invalidTags, invalidConfiguration, changedContext, draftSaveFailed
     var errorDescription: String? {
         switch self {
         case .missing: "所选对话已删除或不属于当前连接，请刷新后重试。"
@@ -113,6 +113,7 @@ enum WorkspaceError: LocalizedError {
         case .archived: "这段对话已归档，请恢复后继续发送；也可以从历史消息创建分支。"
         case .invalidTags: "最多添加 8 个标签，每个最多 20 字符；使用逗号分隔。"
         case .invalidConfiguration: "请检查设置：模型最多 200 字符，供应商最多 80 字符且不含空格，系统提示词最多 10,000 字符，上下文为 0–50 轮。指定供应商时需同时填写模型。"
+        case .draftSaveFailed: "当前草稿无法保存，已保留输入和当前对话，请检查设备存储后重试。"
         case .changedContext: "当前连接或对话已改变，请重新打开设置。"
         }
     }

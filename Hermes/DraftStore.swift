@@ -14,7 +14,7 @@ final class DraftStore {
         }
     }
 
-    static func localKey(profileID: UUID, conversationID: UUID?) -> String {
+    nonisolated static func localKey(profileID: UUID, conversationID: UUID?) -> String {
         "\(profileID.uuidString)/local/\(conversationID?.uuidString ?? "new")"
     }
 

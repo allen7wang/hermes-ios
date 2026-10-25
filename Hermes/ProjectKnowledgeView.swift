@@ -96,15 +96,20 @@ struct ProjectKnowledgeView: View {
                             }
                             Text("支持 UTF-8 的 .txt / .md 文件，单文件最多 256 KiB。导入后先检查编辑，再点击保存。")
                                 .font(.caption).foregroundStyle(HermesTheme.muted)
-                            Button("批量整理资料", systemImage: "checklist") { managing = true }
+                            Menu {
+                                Button("批量导出、复制与删除", systemImage: "checklist") { managing = true }
+                                    .accessibilityIdentifier("knowledge-batch")
+                                Button("批量添加对话引用", systemImage: "text.badge.plus") { addingReferences = true }
+                                    .accessibilityIdentifier("knowledge-add-references")
+                                Button("批量移除对话引用", systemImage: "text.badge.minus") { removingReferences = true }
+                                    .accessibilityIdentifier("knowledge-remove-references")
+                            } label: {
+                                Label("整理资料", systemImage: "slider.horizontal.3")
+                            }.font(.subheadline.weight(.medium)).foregroundStyle(HermesTheme.accent)
                                 .disabled(unavailable || documents.isEmpty || readingFile)
-                                .accessibilityIdentifier("knowledge-batch")
-                            Button("批量添加对话引用", systemImage: "text.badge.plus") { addingReferences = true }
-                                .disabled(unavailable || documents.isEmpty || readingFile)
-                                .accessibilityIdentifier("knowledge-add-references")
-                            Button("批量移除对话引用", systemImage: "text.badge.minus") { removingReferences = true }
-                                .disabled(unavailable || documents.isEmpty || readingFile)
-                                .accessibilityIdentifier("knowledge-remove-references")
+                                .accessibilityIdentifier("knowledge-organize")
+                            Text("批量导出、复制或删除资料，也可统一添加和移除对话引用。")
+                                .font(.caption).foregroundStyle(HermesTheme.muted)
                             if documents.count >= ProjectDocument.collectionLimit || characterCount >= ProjectDocument.projectCharacterLimit {
                                 Text("资料库已达到数量或正文字符上限。可以编辑或删除已有资料，再添加新内容。")
                                     .font(.caption).foregroundStyle(.orange)

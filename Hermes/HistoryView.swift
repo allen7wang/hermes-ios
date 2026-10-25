@@ -162,8 +162,7 @@ struct HistoryView: View {
                         } else if conversation.isTrashed {
                             trashPreview = conversation
                         } else {
-                            model.select(conversation.id)
-                            openChat()
+                            if model.select(conversation.id) { openChat() }
                         }
                     } label: {
                         HStack(spacing: 12) {
@@ -201,7 +200,7 @@ struct HistoryView: View {
                     Picker("排序", selection: $sort) { ForEach(ConversationSort.allCases) { Text($0.title).tag($0) } }
                     Button(selecting ? "完成整理" : "批量整理", systemImage: "checklist") { selecting.toggle(); selected = [] }
                     if selecting { Button("选择当前结果", systemImage: "checkmark.circle") { selected = visibleIDs } }
-                    Button("新对话默认设置", systemImage: "slider.horizontal.3") { model.newConversation(); showSettings() }
+                    Button("新对话默认设置", systemImage: "slider.horizontal.3") { if model.newConversation() { showSettings() } }
                 } label: { Image(systemName: "slider.horizontal.3") }
                 .disabled(model.isSending).accessibilityLabel("工作台选项")
             }
@@ -278,7 +277,7 @@ struct HistoryView: View {
     private func newConversation() {
         do {
             if case .project(let id) = project { _ = try model.startProjectConversation(id, profileID: model.activeProfileID) }
-            else { model.newConversation() }
+            else { guard model.newConversation() else { return } }
             openChat()
         } catch { model.errorMessage = error.localizedDescription }
     }
@@ -304,7 +303,7 @@ struct HistoryView: View {
         perform { try model.deleteConversations(ids); recentlyTrashed = ids; selected.subtract(ids) }
     }
     private func openChat() { if let onOpen { onOpen() } else { dismiss() } }
-    private func edit(_ conversation: Conversation) { model.select(conversation.id); showSettings() }
+    private func edit(_ conversation: Conversation) { if model.select(conversation.id) { showSettings() } }
     private func showSettings() { settingsTarget = ConversationSettingsTarget(conversationID: model.selectedID, profileID: model.activeProfileID, draftKey: model.draftKey) }
     private func perform(_ action: () throws -> Void) { do { try action() } catch { model.errorMessage = error.localizedDescription } }
     private func export(_ conversations: [Conversation]) {
@@ -315,7 +314,7 @@ struct HistoryView: View {
     }
 }
 
-private struct WorkspaceConversationRow: View {
+struct WorkspaceConversationRow: View {
     let conversation: Conversation
     var projectName: String? = nil
     var body: some View {

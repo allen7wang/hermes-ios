@@ -28,6 +28,8 @@ struct ProjectWorkspaceView: View {
     }
 
     var body: some View {
+        let conversationCounts = ProjectConversationCounts.aggregate(model.conversations)
+        let assignedCount = conversationCounts.values.reduce(0) { $0 + $1.active + $1.archived }
         NavigationStack(path: $path) {
             List {
                 Section {
@@ -40,8 +42,8 @@ struct ProjectWorkspaceView: View {
                             .font(.subheadline).foregroundStyle(HermesTheme.muted)
                         HStack(spacing: 12) {
                             projectMetric("项目", count: model.projects.count)
-                            projectMetric("项目对话", count: model.conversations.filter { $0.projectID != nil }.count)
-                            projectMetric("未分配", count: model.conversations.filter { $0.projectID == nil }.count)
+                            projectMetric("项目对话", count: assignedCount)
+                            projectMetric("未分配", count: model.conversations.count - assignedCount)
                         }
                         Button { editor = ProjectEditorTarget(project: nil, profileID: model.activeProfileID) } label: {
                             HStack { Label("创建项目", systemImage: "folder.badge.plus"); Spacer(); Image(systemName: "arrow.up.right") }
@@ -66,8 +68,8 @@ struct ProjectWorkspaceView: View {
                     ForEach(visible) { project in
                         NavigationLink(value: ProjectRoute(projectID: project.id, profileID: model.activeProfileID)) {
                             ProjectCard(project: project,
-                                activeCount: model.conversations.filter { $0.projectID == project.id && !$0.isArchived }.count,
-                                archivedCount: model.conversations.filter { $0.projectID == project.id && $0.isArchived }.count)
+                                activeCount: conversationCounts[project.id]?.active ?? 0,
+                                archivedCount: conversationCounts[project.id]?.archived ?? 0)
                         }.listRowBackground(HermesTheme.surface).accessibilityIdentifier("project-row-\(project.id)")
                     }
                 }
@@ -258,8 +260,8 @@ struct ProjectDetailView: View {
             if records.isEmpty { Text("这里还没有对话").font(.subheadline).foregroundStyle(HermesTheme.muted) }
             ForEach(records) { conversation in
                 Button {
-                    model.select(conversation.id)
-                    onOpen()
+                    if model.select(conversation.id) { onOpen() }
+                    else { error = model.errorMessage ?? WorkspaceError.draftSaveFailed.localizedDescription }
                 } label: {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack {

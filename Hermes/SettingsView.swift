@@ -24,7 +24,7 @@ struct SettingsView: View {
                     ForEach(model.profiles) { profile in
                         HStack(spacing: 12) {
                             Button {
-                                model.selectProfile(profile.id)
+                                if !model.selectProfile(profile.id) { errorMessage = model.errorMessage ?? WorkspaceError.draftSaveFailed.localizedDescription }
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: profile.id == model.activeProfileID ? "checkmark.circle.fill" : "circle")
@@ -109,7 +109,7 @@ struct SettingsView: View {
             } message: {
                 Text("此连接的密钥、本机对话、图片和文字草稿会从设备删除。服务端会话和任务会保留。")
             }
-            .alert("无法删除连接", isPresented: Binding(
+            .alert("连接操作未完成", isPresented: Binding(
                 get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
             )) { Button("知道了", role: .cancel) { errorMessage = nil } }
             message: { Text(errorMessage ?? "") }

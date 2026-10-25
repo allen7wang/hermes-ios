@@ -167,6 +167,7 @@ final class AppModel: ObservableObject {
             localProjects: keepsIdentity ? existing?.localProjects : nil
         )
         guard !profile.name.isEmpty else { throw ProfileError.missingName }
+        try draftStore.set(draft, for: draftKey)
         try credentials.save(connection.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), account: profile.credentialAccount)
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) { profiles[index] = profile }
         else { profiles.append(profile) }
@@ -179,9 +180,13 @@ final class AppModel: ObservableObject {
         return credentials.read(account: profile.credentialAccount)
     }
 
-    func selectProfile(_ id: UUID) {
-        guard !isSending, let profile = profiles.first(where: { $0.id == id }) else { return }
+    @discardableResult
+    func selectProfile(_ id: UUID) -> Bool {
+        guard !isSending, let profile = profiles.first(where: { $0.id == id }) else { return false }
+        guard id != activeProfileID else { return true }
+        guard preserveCurrentDraft() else { return false }
         activate(profile)
+        return true
     }
 
     func removeProfile(_ id: UUID) throws {
@@ -600,6 +605,7 @@ final class AppModel: ObservableObject {
     func startProjectConversation(_ id: UUID, profileID: UUID) throws -> UUID {
         try requireProjectAccess(profileID: profileID)
         guard projects.contains(where: { $0.id == id }) else { throw ProjectError.missing }
+        try draftStore.set(draft, for: draftKey)
         let workspace = ConversationWorkspace(configuration: profiles.first { $0.id == profileID }?.conversationDefaults ?? ConversationConfiguration())
         let conversation = Conversation(title: "新对话", messages: [], updatedAt: Date(), profileID: profileID,
             workspace: workspace.isDefault ? nil : workspace, projectID: id)
@@ -628,16 +634,30 @@ final class AppModel: ObservableObject {
         connectionState = success ? .connected : .offline
     }
 
-    func newConversation() {
-        guard !isSending else { return }
+    @discardableResult
+    func newConversation() -> Bool {
+        guard !isSending else { return false }
+        guard selectedID != nil else { return true }
+        guard preserveCurrentDraft() else { return false }
         selectedID = nil
         rememberSelection()
+        return true
     }
 
-    func select(_ id: UUID) {
-        guard !isSending, conversations.contains(where: { $0.id == id }) else { return }
+    @discardableResult
+    func select(_ id: UUID) -> Bool {
+        guard !isSending, conversations.contains(where: { $0.id == id }) else { return false }
+        guard id != selectedID else { return true }
+        guard preserveCurrentDraft() else { return false }
         selectedID = id
         rememberSelection()
+        return true
+    }
+
+    private func preserveCurrentDraft() -> Bool {
+        guard !needsRecovery else { errorMessage = ProfileError.storageUnavailable.localizedDescription; return false }
+        do { try draftStore.set(draft, for: draftKey); return true }
+        catch { errorMessage = "草稿保存失败，已保留当前输入，暂未切换：\(error.localizedDescription)"; return false }
     }
 
     func delete(_ id: UUID) {
@@ -857,7 +877,7 @@ final class AppModel: ObservableObject {
         guard !isSending else { throw MessageLibraryError.busy }
         guard !needsRecovery else { throw ProfileError.storageUnavailable }
         guard libraryItem(target) != nil else { throw MessageLibraryError.missing }
-        select(target.conversationID)
+        guard select(target.conversationID) else { throw WorkspaceError.draftSaveFailed }
     }
 
     func quoteMessage(_ target: LocalMessageTarget) throws {
@@ -1107,6 +1127,7 @@ final class AppModel: ObservableObject {
                                   workspace: workspace.isDefault ? nil : workspace, projectID: source.projectID, referenceDocumentIDs: source.referenceDocumentIDs)
         let candidate = [branch] + allConversations
         do {
+            try draftStore.set(draft, for: draftKey)
             try JSONEncoder().encode(candidate).write(to: conversationsURL, options: .atomic)
         } catch {
             errorMessage = "分支保存失败，尚未发送消息：\(error.localizedDescription)"
