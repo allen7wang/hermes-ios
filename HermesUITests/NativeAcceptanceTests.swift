@@ -78,7 +78,10 @@ final class NativeAcceptanceTests: XCTestCase {
         tap(app.buttons["对话"])
         XCTAssertTrue(app.buttons["workspace-search-conversation/\(current)"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["workspace-search-conversation/10000000-0000-0000-0000-000000000002"].exists)
-        tap(app.switches["search-include-archived"])
+        let includeArchived = app.switches["search-include-archived"]
+        includeArchived.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let switchedOn = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: includeArchived)
+        XCTAssertEqual(XCTWaiter.wait(for: [switchedOn], timeout: 5), .completed)
         let archived = app.buttons["workspace-search-conversation/10000000-0000-0000-0000-000000000002"]
         XCTAssertTrue(archived.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["workspace-search-conversation/10000000-0000-0000-0000-000000000003"].exists)
@@ -132,23 +135,22 @@ final class NativeAcceptanceTests: XCTestCase {
         if !app.navigationBars["备份与恢复"].exists { tap(app.buttons["备份与恢复"]) }
     }
 
-    private func visible(_ label: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
-    }
-
     private func selectLocalHermesFolder() {
+        _ = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].waitForExistence(timeout: 10)
+        if app.buttons["Hermes, Actions Menu"].exists { return }
         let browse = app.buttons["Browse"]
-        if browse.waitForExistence(timeout: 2) { browse.tap() }
-        let local = visible("On My iPhone")
+        if browse.exists { tap(browse) }
+        let local = app.buttons["On My iPhone"]
         if local.waitForExistence(timeout: 3) { tap(local) }
-        let folder = visible("Hermes")
-        if folder.waitForExistence(timeout: 3) { tap(folder) }
+        let folder = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Hermes", "Folder")).firstMatch
+        tap(folder)
     }
 
     private func importExportedFile() {
         tap(app.buttons["从文件导入备份"])
         selectLocalHermesFolder()
-        let file = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Hermes-Acceptance")).firstMatch
+        capture("System import picker")
+        let file = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "Hermes-Acceptance")).firstMatch
         tap(file)
         let confirm = app.buttons["确认合并导入"]
         tap(confirm)
@@ -169,7 +171,8 @@ final class NativeAcceptanceTests: XCTestCase {
             name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
         }
         name.typeText("Hermes-Acceptance")
-        tap(app.buttons["Save"])
+        let save = app.buttons.matching(NSPredicate(format: "label IN %@", ["Save", "Move", "Export"])).firstMatch
+        tap(save)
         XCTAssertTrue(app.staticTexts["备份已保存。"].waitForExistence(timeout: 15))
         capture("System export saved")
         // Change the local draft after export; importing the older file must keep this edit.

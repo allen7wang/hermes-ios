@@ -1,6 +1,12 @@
 name: Native acceptance
 on:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Checks to execute
+        type: choice
+        options: [all, native]
+        default: all
   push:
     branches: [codex/hermes-native-acceptance]
   pull_request:
@@ -31,6 +37,7 @@ jobs:
           xcrun simctl boot "$simulator"
           xcrun simctl bootstatus "$simulator" -b
       - name: Run existing regression tests
+        if: ${{ inputs.scope != 'native' }}
         run: |
           set -euo pipefail
           xcodebuild -project Hermes.xcodeproj -scheme HermesTests -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -onlyUsePackageVersionsFromResolvedFile -parallel-testing-enabled NO -resultBundlePath evidence/Regression.xcresult test > evidence/regression.log 2>&1
@@ -40,7 +47,7 @@ jobs:
           set -euo pipefail
           xcodebuild -project Hermes.xcodeproj -scheme HermesUITests -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -onlyUsePackageVersionsFromResolvedFile -parallel-testing-enabled NO -resultBundlePath evidence/NativeAcceptance.xcresult test > evidence/native-acceptance.log 2>&1
       - name: Verify Release build
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.scope != 'native' }}
         run: |
           set -euo pipefail
           xcodebuild -project Hermes.xcodeproj -scheme Hermes -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -onlyUsePackageVersionsFromResolvedFile build > evidence/release-build.log 2>&1
@@ -56,6 +63,16 @@ jobs:
             xcrun simctl shutdown "$HERMES_SIMULATOR" || true
             xcrun simctl delete "$HERMES_SIMULATOR" || true
           fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hermes-native-diagnostics-${{ github.run_id }}
+          path: |
+            evidence/*.log
+            evidence/*-summary.json
+            evidence/environment.txt
+            evidence/NativeAcceptance.xcresult-attachments/
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
