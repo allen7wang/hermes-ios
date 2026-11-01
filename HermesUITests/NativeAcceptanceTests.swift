@@ -156,6 +156,11 @@ final class NativeAcceptanceTests: XCTestCase {
         file.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
         capture("Selected backup file icon")
         let picker = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+        let firstSelection = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: picker)
+        if XCTWaiter.wait(for: [firstSelection], timeout: 3) != .completed {
+            file.doubleTap()
+            capture("Opened backup file with double tap")
+        }
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: picker)
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 15), .completed)
         let preview = app.staticTexts["待导入的备份"]
