@@ -142,8 +142,9 @@ final class NativeAcceptanceTests: XCTestCase {
         if browse.exists { tap(browse) }
         let local = app.buttons["On My iPhone"]
         if local.waitForExistence(timeout: 3) { tap(local) }
-        let folder = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Hermes", "Folder")).firstMatch
-        tap(folder)
+        let folder = app.cells["Hermes, Container"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 10))
+        folder.tap()
     }
 
     private func importExportedFile() {
@@ -151,7 +152,8 @@ final class NativeAcceptanceTests: XCTestCase {
         selectLocalHermesFolder()
         capture("System import picker")
         let file = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "Hermes-Acceptance")).firstMatch
-        tap(file)
+        XCTAssertTrue(file.waitForExistence(timeout: 10))
+        file.tap()
         let confirm = app.buttons["确认合并导入"]
         tap(confirm)
         let success = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "恢复完成。")).firstMatch
