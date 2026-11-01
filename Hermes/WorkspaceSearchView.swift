@@ -30,6 +30,7 @@ struct WorkspaceSearchView: View {
                 Text("在「\(model.activeProfileName)」的本机内容中查找，结果可直接打开。")
                     .font(.subheadline).foregroundStyle(HermesTheme.muted)
                 Toggle("包含已归档对话与草稿", isOn: $includeArchived).font(.subheadline)
+                    .accessibilityIdentifier("search-include-archived")
                 Picker("内容类型", selection: $kind) {
                     Text("全部类型").tag(WorkspaceSearchKind?.none)
                     ForEach(WorkspaceSearchKind.allCases) { Text($0.title).tag(Optional($0)) }

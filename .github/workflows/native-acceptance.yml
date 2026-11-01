@@ -1,0 +1,59 @@
+name: Native acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/hermes-native-acceptance]
+  pull_request:
+    paths: ['Hermes/**', 'HermesTests/**', 'HermesUITests/**', 'tools/**', '.github/workflows/native-acceptance.yml']
+permissions:
+  contents: read
+concurrency:
+  group: native-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Xcode project and isolated simulator
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          gem install xcodeproj --no-document --user-install
+          ruby tools/generate_project.rb
+          mkdir -p evidence
+          xcodebuild -version > evidence/environment.txt
+          sw_vers >> evidence/environment.txt
+          xcrun simctl list runtimes >> evidence/environment.txt
+          simulator=$(xcrun simctl create Hermes-Acceptance com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro com.apple.CoreSimulator.SimRuntime.iOS-18-5)
+          echo "HERMES_SIMULATOR=$simulator" >> "$GITHUB_ENV"
+          xcrun simctl boot "$simulator"
+          xcrun simctl bootstatus "$simulator" -b
+      - name: Run existing regression tests
+        run: |
+          set -euo pipefail
+          xcodebuild -project Hermes.xcodeproj -scheme HermesTests -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO -resultBundlePath evidence/Regression.xcresult test > evidence/regression.log 2>&1
+      - name: Run native interaction and system file acceptance
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          xcodebuild -project Hermes.xcodeproj -scheme HermesUITests -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO -resultBundlePath evidence/NativeAcceptance.xcresult test > evidence/native-acceptance.log 2>&1
+      - name: Collect evidence
+        if: always()
+        run: |
+          cp -R Hermes.xcodeproj evidence/Generated-Hermes.xcodeproj
+          for bundle in evidence/*.xcresult; do
+            xcrun xcresulttool get test-results summary --path "$bundle" > "$bundle-summary.json" || true
+            xcrun xcresulttool export attachments --path "$bundle" --output-path "$bundle-attachments" || true
+          done
+          if [ -n "${HERMES_SIMULATOR:-}" ]; then
+            xcrun simctl shutdown "$HERMES_SIMULATOR" || true
+            xcrun simctl delete "$HERMES_SIMULATOR" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hermes-native-acceptance-${{ github.run_id }}
+          path: evidence/
+          retention-days: 14

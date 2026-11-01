@@ -96,8 +96,34 @@ tests.build_configurations.each do |configuration|
   settings['CODE_SIGN_STYLE'] = 'Automatic'
 end
 
+
+# Native interaction tests run in their own process, separately from model/layout tests.
+ui_tests = project.targets.find { |item| item.name == 'HermesUITests' } || project.new_target(:ui_test_bundle, 'HermesUITests', :ios, '17.0')
+ui_tests.add_dependency(target) unless ui_tests.dependencies.any? { |item| item.target == target }
+ui_group = project.main_group.find_subpath('HermesUITests', false) || project.main_group.new_group('HermesUITests', 'HermesUITests')
+Dir.glob(File.join(root, 'HermesUITests', '*.swift')).sort.each do |file|
+  reference = ui_group.files.find { |item| item.path == File.basename(file) } || ui_group.new_file(File.basename(file))
+  ui_tests.source_build_phase.add_file_reference(reference) unless ui_tests.source_build_phase.files_references.include?(reference)
+end
+ui_tests.build_configurations.each do |configuration|
+  configuration.build_settings.merge!(
+    'PRODUCT_BUNDLE_IDENTIFIER' => 'com.a7w.hermes.uitests',
+    'SWIFT_VERSION' => '5.0',
+    'IPHONEOS_DEPLOYMENT_TARGET' => '17.0',
+    'GENERATE_INFOPLIST_FILE' => 'YES',
+    'TEST_TARGET_NAME' => 'Hermes',
+    'CODE_SIGN_STYLE' => 'Automatic',
+    'TARGETED_DEVICE_FAMILY' => '1,2'
+  )
+end
+project.root_object.attributes['TargetAttributes'] ||= {}
+project.root_object.attributes['TargetAttributes'][ui_tests.uuid] = { 'TestTargetID' => target.uuid }
+
 project.save
 scheme = Xcodeproj::XCScheme.new
 scheme.configure_with_targets(target, tests)
 scheme.save_as(project.path, 'HermesTests', true)
+ui_scheme = Xcodeproj::XCScheme.new
+ui_scheme.configure_with_targets(target, ui_tests)
+ui_scheme.save_as(project.path, 'HermesUITests', true)
 puts 'Generated Hermes.xcodeproj'

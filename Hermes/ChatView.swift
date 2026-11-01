@@ -544,7 +544,7 @@ struct ChatView: View {
                     .padding(.horizontal, 15)
                     .padding(.vertical, 13)
                     .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 20))
-                    .accessibilityLabel("消息内容")
+                    .accessibilityLabel("消息内容").accessibilityIdentifier("chat-composer")
 
                 Button {
                     if model.settings.isConfigured {
