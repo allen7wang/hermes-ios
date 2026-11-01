@@ -1,0 +1,130 @@
+[
+  {
+    "file": "draft-write-failure.png",
+    "sha256": "e323356b63de041cae8f2a53320a0a25a6804beacd05928b37eadd07c96c35a8",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41286792974",
+    "commit": "85eba63",
+    "test": "NativeAcceptanceTests/testNativeFailedDraftWriteBlocksNewConversationAndKeepsInput()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "04B60677-12AC-4F16-8611-4E2F3372CE42",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "89A4ABA4-AC14-437E-992A-BD89157D8EB2.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Unsaved draft blocks navigation_0_324544DF-E073-4738-B911-773B74275DF3.png",
+      "timestamp": 1793520334.864
+    }
+  },
+  {
+    "file": "draft-after-restart.png",
+    "sha256": "6319c30cea097b3c3b93b5c181c777ce87286c012eba333b6f7f161e0f452aca",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41286792974",
+    "commit": "85eba63",
+    "test": "NativeAcceptanceTests/testNativeMessageAndDraftResultsPreserveInputAcrossRestart()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "04B60677-12AC-4F16-8611-4E2F3372CE42",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "31B8994A-DCF0-4FEF-8DED-2ABAAA544027.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Draft restored after process restart_0_98D83EDE-C319-4329-95A7-4841B0E9D4F0.png",
+      "timestamp": 1793520400.75
+    }
+  },
+  {
+    "file": "project-result.png",
+    "sha256": "e9f96514993d639d23652d79f4274ece6b08849309696c831fd689cf80d2e918",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41286792974",
+    "commit": "85eba63",
+    "test": "NativeAcceptanceTests/testNativeProjectDocumentAndArchivedConversationResultsRespectScope()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "04B60677-12AC-4F16-8611-4E2F3372CE42",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "BEC53221-FFFD-44EF-AFEE-6ADB323F41D7.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Opened project search result_0_C59239A7-7CFA-4030-B9C9-529FCDBD6A5B.png",
+      "timestamp": 1793520425.557
+    }
+  },
+  {
+    "file": "document-result.png",
+    "sha256": "686212e1bbfe465afe7a663c68592a678169fa2571e8c13fab5d1a5b71f05e24",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41286792974",
+    "commit": "85eba63",
+    "test": "NativeAcceptanceTests/testNativeProjectDocumentAndArchivedConversationResultsRespectScope()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "04B60677-12AC-4F16-8611-4E2F3372CE42",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "F26B339E-890D-49B5-8941-88FC9D81FA88.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Opened document search result_0_99FD31A6-88EA-4765-B849-6D1524FF08B3.png",
+      "timestamp": 1793520431.876
+    }
+  },
+  {
+    "file": "archived-read-only.png",
+    "sha256": "2c0a6bcf1be9418bb77cc7e1baee23210a4a4a29080e9e822dddf15156c090d3",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41286792974",
+    "commit": "85eba63",
+    "test": "NativeAcceptanceTests/testNativeProjectDocumentAndArchivedConversationResultsRespectScope()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "04B60677-12AC-4F16-8611-4E2F3372CE42",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "CCD7EA43-AC0D-46DF-B3C9-A5C5181D53C5.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Archived result cannot send_0_EE91E3BA-765D-4CF5-87BA-5C23C97BBEC0.png",
+      "timestamp": 1793520447.254
+    }
+  },
+  {
+    "file": "system-export-picker.png",
+    "sha256": "d64e6d49673630ba5dae51ca978fe79dca0bd092c529b3043759c9b99d0615e5",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41289259132",
+    "commit": "8070fe6",
+    "test": "NativeAcceptanceTests/testNativeSystemFileExportImportConflictsAndFreshInstallation()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "DF1E7ECF-C9BC-4339-876B-45D8B852A0D7",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "BF52A8B0-2F0F-42E7-9153-9B1AC57F7BBC.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "System export picker_0_710DBBA0-C4E1-4EB2-ACE5-0DB3F10DF9E9.png",
+      "timestamp": 1793522360.721
+    }
+  },
+  {
+    "file": "system-export-saved.png",
+    "sha256": "afaf97b9efbe3ff6e6a0844cb40b0391e4e283cb96a8ff1ddb0e1e4fd4d7899b",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41289259132",
+    "commit": "8070fe6",
+    "test": "NativeAcceptanceTests/testNativeSystemFileExportImportConflictsAndFreshInstallation()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "DF1E7ECF-C9BC-4339-876B-45D8B852A0D7",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "EEDFA9F4-ADD4-4186-B153-AED08F6AD9FB.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "System export saved_0_02985C57-FC17-4DCF-8A31-881556D8A707.png",
+      "timestamp": 1793522373.84
+    }
+  },
+  {
+    "file": "import-selection-pending.png",
+    "sha256": "b54c9ea8b0cf3f2c40c017724336587e1176f71dd32fc7713957d76e0d81263e",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41289259132",
+    "commit": "8070fe6",
+    "test": "NativeAcceptanceTests/testNativeSystemFileExportImportConflictsAndFreshInstallation()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "DF1E7ECF-C9BC-4339-876B-45D8B852A0D7",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "EF3B4774-7BB1-4CE8-B359-47AFB4177D31.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Selected backup file icon_0_11F24E97-436C-4CC0-8F96-62B8CD7D641F.png",
+      "timestamp": 1793522403.214
+    }
+  }
+]

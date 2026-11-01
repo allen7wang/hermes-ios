@@ -51,7 +51,7 @@ xcodebuild -project Hermes.xcodeproj -scheme HermesUITests \
 
 ## 真实 API 待验收
 
-当前仓库未配置测试服务 Secret 或自托管 runner，本机为 WSL 且无 Xcode/SSH Mac 配置。真实 API 的服务地址、隔离账号和安全凭据位置仍待提供。
+当前仓库未配置测试服务 Secret、Variable、Environment 或自托管 runner，本机为 WSL 且无 Xcode/SSH Mac 配置。已安装的本机 Hermes 未配置 API Server。真实 API 的服务地址、隔离账号和安全凭据位置仍待提供。
 
 拿到获授权的测试环境后，在普通运行的 App 中执行，不使用上述拒绝网络的夹具：
 
