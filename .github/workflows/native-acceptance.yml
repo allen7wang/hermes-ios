@@ -5,8 +5,11 @@ on:
       scope:
         description: Checks to execute
         type: choice
-        options: [all, native, files]
+        options: [all, native, files, inspect]
         default: all
+      inspect_run:
+        description: Existing run to inspect
+        type: string
   push:
     branches: [codex/hermes-native-acceptance]
   pull_request:
@@ -18,6 +21,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   ios:
+    if: ${{ inputs.scope != 'inspect' }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -87,4 +91,60 @@ jobs:
         with:
           name: hermes-native-acceptance-${{ github.run_id }}
           path: evidence/
+          retention-days: 14
+  inspect:
+    if: ${{ inputs.scope == 'inspect' }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export existing result diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INSPECT_RUN: ${{ inputs.inspect_run }}
+        run: |
+          set -euo pipefail
+          [[ "$INSPECT_RUN" =~ ^[0-9]+$ ]]
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          gh run download "$INSPECT_RUN" --repo "$GH_REPO" --name "hermes-native-acceptance-$INSPECT_RUN" --dir previous-results
+          xcrun xcresulttool export diagnostics --path previous-results/NativeAcceptance.xcresult --output-path diagnostics
+          mkdir -p crash-evidence
+          xcrun xcresulttool get object --legacy --format json --path previous-results/NativeAcceptance.xcresult > crash-evidence/result-root.json
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile, shutil
+          root = Path("diagnostics")
+          for archive in list(root.rglob("*.zip")):
+              try:
+                  with zipfile.ZipFile(archive) as z:
+                      z.extractall(archive.with_suffix(""))
+              except zipfile.BadZipFile:
+                  pass
+          files = [p for p in root.rglob("*") if p.is_file()]
+          Path("crash-evidence/files.txt").write_text("\n".join(str(p) for p in files))
+          found = []
+          for p in files:
+              if p.suffix.lower() in (".ips", ".crash") and "hermes" in p.name.lower():
+                  destination = Path("crash-evidence") / (str(len(found)) + "-" + p.name)
+                  shutil.copy2(p, destination)
+                  found.append(destination)
+                  print(p)
+                  print(p.read_text(errors="replace")[:45000])
+          print("Hermes crash reports:", len(found))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hermes-crash-evidence-${{ github.run_id }}
+          path: crash-evidence/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hermes-raw-diagnostics-${{ github.run_id }}
+          path: diagnostics/
           retention-days: 14
