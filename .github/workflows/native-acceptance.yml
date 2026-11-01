@@ -47,11 +47,11 @@ jobs:
           HERMES_TEST_SCOPE: ${{ inputs.scope }}
         run: |
           set -euo pipefail
-          selection=()
+          selection=(-project Hermes.xcodeproj -scheme HermesUITests)
           if [ "$HERMES_TEST_SCOPE" = files ]; then
             selection+=("-only-testing:HermesUITests/NativeAcceptanceTests/testNativeSystemFileExportImportConflictsAndFreshInstallation")
           fi
-          xcodebuild "${selection[@]}" -project Hermes.xcodeproj -scheme HermesUITests -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -onlyUsePackageVersionsFromResolvedFile -parallel-testing-enabled NO -resultBundlePath evidence/NativeAcceptance.xcresult test > evidence/native-acceptance.log 2>&1
+          xcodebuild "${selection[@]}" -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -onlyUsePackageVersionsFromResolvedFile -parallel-testing-enabled NO -resultBundlePath evidence/NativeAcceptance.xcresult test > evidence/native-acceptance.log 2>&1
       - name: Verify Release build
         if: ${{ !cancelled() && (inputs.scope == 'all' || inputs.scope == '') }}
         run: |

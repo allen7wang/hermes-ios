@@ -153,7 +153,14 @@ final class NativeAcceptanceTests: XCTestCase {
         capture("System import picker")
         let file = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "Hermes-Acceptance")).firstMatch
         XCTAssertTrue(file.waitForExistence(timeout: 10))
-        file.tap()
+        file.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+        capture("Selected backup file icon")
+        let picker = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: picker)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 15), .completed)
+        let preview = app.staticTexts["待导入的备份"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 15))
+        capture("System import preview")
         let confirm = app.buttons["确认合并导入"]
         tap(confirm)
         let success = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "恢复完成。")).firstMatch
@@ -165,8 +172,8 @@ final class NativeAcceptanceTests: XCTestCase {
         launch()
         openBackup()
         tap(app.buttons["导出备份到文件"])
-        capture("System export picker")
         selectLocalHermesFolder()
+        capture("System export picker")
         let name = app.textFields.firstMatch
         tap(name)
         if let value = name.value as? String {
