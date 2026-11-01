@@ -72,6 +72,9 @@ jobs:
           if [ -n "${HERMES_SIMULATOR:-}" ]; then
             codesign --display --verbose=2 build/DerivedData/Build/Products/Debug-iphonesimulator/Hermes.app > evidence/app-signature.txt 2>&1 || true
             xcrun simctl spawn "$HERMES_SIMULATOR" log show --last 20m --style compact --predicate '(process == "fileproviderd" OR process CONTAINS "DocumentManager" OR subsystem BEGINSWITH "com.apple.FileProvider") AND (eventMessage CONTAINS[c] "error" OR eventMessage CONTAINS[c] "fail" OR eventMessage CONTAINS[c] "denied" OR eventMessage CONTAINS[c] "signature")' > evidence/file-provider.log 2>&1 || true
+            xcrun simctl spawn "$HERMES_SIMULATOR" log show --last 20m --style compact --predicate 'process == "Hermes" AND (eventMessage CONTAINS[c] "exception" OR eventMessage CONTAINS[c] "assert" OR eventMessage CONTAINS[c] "fatal")' > evidence/app-runtime.log 2>&1 || true
+            mkdir -p evidence/AppCrashes
+            cp "$HOME/Library/Logs/DiagnosticReports"/Hermes*.ips evidence/AppCrashes/ 2>/dev/null || true
             xcrun simctl shutdown "$HERMES_SIMULATOR" || true
             xcrun simctl delete "$HERMES_SIMULATOR" || true
           fi
@@ -84,6 +87,7 @@ jobs:
             evidence/*-summary.json
             evidence/environment.txt
             evidence/app-signature.txt
+            evidence/AppCrashes/
             evidence/NativeAcceptance.xcresult-attachments/
           retention-days: 14
       - uses: actions/upload-artifact@v4

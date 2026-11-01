@@ -14,6 +14,7 @@ struct MessageLibraryView: View {
     let onOpen: (LocalMessageTarget) -> Void
     let onShowDraft: (() -> Void)?
     @State private var query = ""
+    @State private var navigationPath = NavigationPath()
     @State private var filter: MessageLibraryFilter = .bookmarks
     @State private var role: MessageLibraryRole = .all
     @State private var results: [MessageLibraryItem] = []
@@ -63,7 +64,7 @@ struct MessageLibraryView: View {
     private var availableTags: [String] { Array(Set(model.conversations.flatMap { $0.workspaceState.tags })).sorted() }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -233,8 +234,11 @@ struct MessageLibraryView: View {
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .onChange(of: availableTags) { _, values in if let tag, !values.contains(tag) { self.tag = nil } }
         .onChange(of: model.activeProfileID) { _, _ in
-            query = ""; scope = .all; role = .all; tag = nil; project = .all
+            navigationPath = NavigationPath()
+            query = ""; filter = .bookmarks; scope = .all; role = .all; tag = nil; project = .all
             selection = []; selecting = false; batchNotice = nil; results = []; searching = true
+            exportedBatch = nil; bookmarkBatch = nil; quotedBatch = nil; knowledgeBatch = nil
+            batchError = nil
         }
         .onChange(of: model.conversations) { _, _ in
             selection = Set(selection.filter { model.libraryItem($0) != nil })

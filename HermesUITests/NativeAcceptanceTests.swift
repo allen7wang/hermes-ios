@@ -61,6 +61,29 @@ final class NativeAcceptanceTests: XCTestCase {
 
     private var composer: XCUIElement { app.descendants(matching: .any)["chat-composer"].firstMatch }
 
+    func testNativeConnectionChangeClearsDeepWorkspaceNavigation() {
+        launch()
+        search("nebula")
+        tap(app.buttons["workspace-search-project/10000000-0000-0000-0000-000000000010"])
+        XCTAssertTrue(app.navigationBars["nebula project"].waitForExistence(timeout: 10))
+        tap(app.tabBars.buttons["设置"])
+        tap(app.buttons["切换到 Other connection"])
+        tap(app.tabBars.buttons["工作台"])
+        XCTAssertTrue(app.navigationBars["工作台"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.navigationBars["nebula project"].exists)
+        search("nebula")
+        XCTAssertTrue(app.buttons["workspace-search-conversation/10000000-0000-0000-0000-000000000004"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["workspace-search-project/10000000-0000-0000-0000-000000000010"].exists)
+        tap(app.tabBars.buttons["设置"])
+        tap(app.buttons["切换到 Acceptance"])
+        tap(app.tabBars.buttons["工作台"])
+        XCTAssertTrue(app.buttons["home-new-chat"].waitForExistence(timeout: 10))
+        tap(app.buttons["home-new-chat"])
+        XCTAssertTrue(composer.waitForExistence(timeout: 10))
+        XCTAssertEqual(composer.value as? String, "NEW-DRAFT")
+        capture("Connection changes reset workspace navigation")
+    }
+
     func testNativeProjectDocumentAndArchivedConversationResultsRespectScope() {
         launch()
         search("nebula")
