@@ -35,11 +35,15 @@ enum MessageLibraryBatch {
     }
 
     static func characterCount(_ items: [MessageLibraryItem]) -> Int {
-        items.reduce(0) { count, item in
-            count + item.message.content.count + (item.message.bookmark?.note.count ?? 0)
-                + item.conversationTitle.count + (item.projectName?.count ?? 0)
-                + item.conversationTags.reduce(0) { $0 + $1.count }
+        var count = 0
+        for item in items {
+            count += item.message.content.count
+            count += item.message.bookmark?.note.count ?? 0
+            count += item.conversationTitle.count
+            count += item.projectName?.count ?? 0
+            for tag in item.conversationTags { count += tag.count }
         }
+        return count
     }
 
     static func validate(_ items: [MessageLibraryItem]) throws {

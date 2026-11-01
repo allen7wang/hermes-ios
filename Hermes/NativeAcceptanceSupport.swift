@@ -18,6 +18,11 @@ enum NativeAcceptanceSupport {
             if !FileManager.default.fileExists(atPath: directory.appendingPathComponent("connections.json").path) {
                 try seed(directory: directory, empty: environment["HERMES_UI_EMPTY"] == "1")
             }
+            // Give the system Files provider a visible local folder before the first export.
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+            try Data("Isolated native acceptance files only.".utf8)
+                .write(to: documents.appendingPathComponent("Acceptance-location.txt"), options: .atomic)
             let configuration = URLSessionConfiguration.ephemeral
             configuration.protocolClasses = [AcceptanceDenyNetwork.self]
             let model = AppModel(defaults: defaults, directory: directory,

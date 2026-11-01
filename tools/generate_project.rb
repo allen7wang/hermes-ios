@@ -96,7 +96,6 @@ tests.build_configurations.each do |configuration|
   settings['CODE_SIGN_STYLE'] = 'Automatic'
 end
 
-
 # Native interaction tests run in their own process, separately from model/layout tests.
 ui_tests = project.targets.find { |item| item.name == 'HermesUITests' } || project.new_target(:ui_test_bundle, 'HermesUITests', :ios, '17.0')
 ui_tests.add_dependency(target) unless ui_tests.dependencies.any? { |item| item.target == target }

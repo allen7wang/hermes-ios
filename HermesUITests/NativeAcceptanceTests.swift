@@ -38,9 +38,16 @@ final class NativeAcceptanceTests: XCTestCase {
     }
 
     private func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(element.waitForExistence(timeout: 10), "Missing: \(element)", file: file, line: line)
-        for _ in 0..<6 where !element.isHittable { app.swipeUp() }
-        XCTAssertTrue(element.isHittable, file: file, line: line)
+        _ = element.waitForExistence(timeout: 3)
+        for _ in 0..<6 {
+            if element.exists && element.isHittable { break }
+            app.swipeUp()
+        }
+        for _ in 0..<6 {
+            if element.exists && element.isHittable { break }
+            app.swipeDown()
+        }
+        XCTAssertTrue(element.exists && element.isHittable, "Missing or hidden: \(element)", file: file, line: line)
         element.tap()
     }
 
@@ -54,7 +61,7 @@ final class NativeAcceptanceTests: XCTestCase {
 
     private var composer: XCUIElement { app.descendants(matching: .any)["chat-composer"].firstMatch }
 
-    func testNativeSearchScopesFiltersAndOpensAllFiveResultTypes() {
+    func testNativeProjectDocumentAndArchivedConversationResultsRespectScope() {
         launch()
         search("nebula")
         let project = app.buttons["workspace-search-project/10000000-0000-0000-0000-000000000010"]
@@ -67,6 +74,9 @@ final class NativeAcceptanceTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["资料详情"].waitForExistence(timeout: 10))
         capture("Opened document search result")
         app.navigationBars.buttons.firstMatch.tap()
+        tap(app.buttons["search-kind-filter"])
+        tap(app.buttons["对话"])
+        XCTAssertTrue(app.buttons["workspace-search-conversation/\(current)"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["workspace-search-conversation/10000000-0000-0000-0000-000000000002"].exists)
         tap(app.switches["search-include-archived"])
         let archived = app.buttons["workspace-search-conversation/10000000-0000-0000-0000-000000000002"]
@@ -87,6 +97,7 @@ final class NativeAcceptanceTests: XCTestCase {
         XCTAssertTrue(composer.waitForExistence(timeout: 10))
         XCTAssertEqual(composer.value as? String, "ORIGINAL-DRAFT")
         tap(composer)
+        composer.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         composer.typeText("-LOCAL")
         tap(app.buttons["返回对话工作台"])
         app.terminate()
@@ -101,6 +112,7 @@ final class NativeAcceptanceTests: XCTestCase {
         launch(draftFailure: true)
         tap(app.buttons["home-recent-\(current)"])
         tap(composer)
+        composer.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         composer.typeText("X")
         XCTAssertTrue(app.alerts["操作失败"].waitForExistence(timeout: 10))
         app.alerts.buttons["知道了"].tap()
@@ -117,7 +129,7 @@ final class NativeAcceptanceTests: XCTestCase {
 
     private func openBackup() {
         tap(app.tabBars.buttons["设置"])
-        tap(app.buttons["备份与恢复"])
+        if !app.navigationBars["备份与恢复"].exists { tap(app.buttons["备份与恢复"]) }
     }
 
     private func visible(_ label: String) -> XCUIElement {
@@ -164,6 +176,7 @@ final class NativeAcceptanceTests: XCTestCase {
         tap(app.tabBars.buttons["工作台"])
         tap(app.buttons["home-recent-\(current)"])
         tap(composer)
+        composer.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         composer.typeText("-LOCAL")
         tap(app.buttons["返回对话工作台"])
         openBackup()
@@ -184,6 +197,7 @@ final class NativeAcceptanceTests: XCTestCase {
         tap(draft)
         XCTAssertEqual(composer.value as? String, "ORIGINAL-DRAFT")
         XCTAssertTrue(app.buttons["chat-reference-documents"].exists)
+        XCTAssertTrue(app.staticTexts["参考资料 1"].exists)
         capture("Original draft and project references restored into fresh installation")
     }
 }

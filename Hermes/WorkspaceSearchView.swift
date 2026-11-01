@@ -34,7 +34,7 @@ struct WorkspaceSearchView: View {
                 Picker("内容类型", selection: $kind) {
                     Text("全部类型").tag(WorkspaceSearchKind?.none)
                     ForEach(WorkspaceSearchKind.allCases) { Text($0.title).tag(Optional($0)) }
-                }
+                }.accessibilityIdentifier("search-kind-filter")
             } footer: { Text("不含回收站、其他连接或服务端内容。消息可搜索收藏备注；项目指令与对话系统提示词不参与检索。") }
                 .listRowBackground(HermesTheme.surface)
             if model.needsRecovery {
