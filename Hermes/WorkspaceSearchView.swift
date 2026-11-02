@@ -9,17 +9,19 @@ private struct WorkspaceSearchRequest: Equatable {
 struct WorkspaceSearchView: View {
     @EnvironmentObject private var model: AppModel
     let onOpenChat: (LocalMessageTarget?) -> Void
+    let onOpenDetail: (WorkspaceDestination, UUID) -> Void
     @State private var query: String
     @State private var includeArchived = false
     @State private var kind: WorkspaceSearchKind?
     @State private var report = WorkspaceSearchReport()
     @State private var resolved: WorkspaceSearchRequest?
     @State private var error: String?
-    @State private var route: WorkspaceDestination?
 
-    init(initialQuery: String = "", onOpenChat: @escaping (LocalMessageTarget?) -> Void) {
+    init(initialQuery: String = "", onOpenChat: @escaping (LocalMessageTarget?) -> Void,
+         onOpenDetail: @escaping (WorkspaceDestination, UUID) -> Void) {
         _query = State(initialValue: initialQuery)
         self.onOpenChat = onOpenChat
+        self.onOpenDetail = onOpenDetail
     }
 
     var body: some View {
@@ -84,13 +86,10 @@ struct WorkspaceSearchView: View {
             report = value
             resolved = request
         }
-        .navigationDestination(item: $route) { destination in
-            WorkspaceDetailDestination(destination: destination, profileID: model.activeProfileID, onOpenChat: onOpenChat)
-        }
         .alert("暂时无法打开", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("知道了", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
-        .onChange(of: model.activeProfileID) { _, _ in query = ""; route = nil; report = .init(); resolved = nil; error = nil }
+        .onChange(of: model.activeProfileID) { _, _ in query = ""; report = .init(); resolved = nil; error = nil }
     }
 
     private func open(_ destination: WorkspaceDestination, profileID: UUID?) {
@@ -98,7 +97,7 @@ struct WorkspaceSearchView: View {
         do {
             try model.openWorkspaceDestination(destination, profileID: profileID)
             switch destination {
-            case .project, .document: route = destination
+            case .project, .document: onOpenDetail(destination, profileID)
             case .message(let target): onOpenChat(target)
             default: onOpenChat(nil)
             }

@@ -12,7 +12,8 @@ final class WorkspaceDiscoveryVisualTests: XCTestCase {
         XCTAssertEqual(snapshot.draftItems().count, 3)
         XCTAssertEqual(snapshot.conversations.filter { !$0.isArchived }.count, 2)
         let view = NavigationStack {
-            WorkspaceHomeView(onOpenChat: { _ in XCTFail("渲染工作台不应打开对话。") })
+            WorkspaceHomeView(onOpenChat: { _ in XCTFail("渲染工作台不应打开对话。") },
+                              onOpenDetail: { _, _ in XCTFail("渲染工作台不应打开详情。") })
         }.environmentObject(fixture.model)
         try await snapshotView(view, size: CGSize(width: 390, height: 1200), name: "home-compact")
         assertUnchanged(fixture, before: before)
@@ -27,7 +28,8 @@ final class WorkspaceDiscoveryVisualTests: XCTestCase {
         XCTAssertFalse(report.results.contains { $0.archived })
         XCTAssertFalse(report.results.contains { $0.title.contains("其他连接") || $0.title.contains("回收站") })
         let view = NavigationStack {
-            WorkspaceSearchView(initialQuery: "发布", onOpenChat: { _ in XCTFail("渲染统一检索不应打开对话。") })
+            WorkspaceSearchView(initialQuery: "发布", onOpenChat: { _ in XCTFail("渲染统一检索不应打开对话。") },
+                                onOpenDetail: { _, _ in XCTFail("渲染统一检索不应打开详情。") })
         }.environmentObject(fixture.model)
         try await snapshotView(view, size: CGSize(width: 1024, height: 1200), name: "search-wide")
         assertUnchanged(fixture, before: before)

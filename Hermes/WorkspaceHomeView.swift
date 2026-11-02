@@ -1,14 +1,10 @@
 import SwiftUI
 
-private enum WorkspaceHomeRoute: Hashable {
-    case search, conversations, drafts
-}
-
 struct WorkspaceHomeView: View {
     @EnvironmentObject private var model: AppModel
     let onOpenChat: (LocalMessageTarget?) -> Void
+    let onOpenDetail: (WorkspaceDestination, UUID) -> Void
     @State private var error: String?
-    @State private var route: WorkspaceDestination?
     @State private var showingSettings = false
 
     var body: some View {
@@ -43,10 +39,10 @@ struct WorkspaceHomeView: View {
                 }.padding(.vertical, 8)
             }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             Section {
-                NavigationLink(value: WorkspaceHomeRoute.search) {
+                NavigationLink(value: WorkspaceNavigationRoute.search) {
                     action("统一检索", subtitle: "对话、消息、项目、资料与草稿", icon: "magnifyingglass")
                 }.disabled(model.needsRecovery).accessibilityIdentifier("home-search")
-                NavigationLink(value: WorkspaceHomeRoute.conversations) {
+                NavigationLink(value: WorkspaceNavigationRoute.conversations) {
                     action("全部对话", subtitle: "筛选、批量整理、归档与回收站", icon: "bubble.left.and.bubble.right")
                 }.accessibilityIdentifier("home-all-conversations")
             }.listRowBackground(HermesTheme.surface)
@@ -56,7 +52,7 @@ struct WorkspaceHomeView: View {
                         .font(.subheadline).foregroundStyle(HermesTheme.muted)
                 }
                 ForEach(Array(drafts.prefix(3))) { item in resultButton(item) }
-                NavigationLink(value: WorkspaceHomeRoute.drafts) {
+                NavigationLink(value: WorkspaceNavigationRoute.drafts) {
                     Label("全部草稿", systemImage: "tray.full").font(.subheadline)
                 }.disabled(model.needsRecovery).accessibilityIdentifier("home-all-drafts")
             } header: { Text("继续草稿 · \(drafts.count)") }
@@ -82,21 +78,11 @@ struct WorkspaceHomeView: View {
         }
         .listStyle(.insetGrouped).scrollContentBackground(.hidden).background(HermesTheme.background)
         .navigationTitle("工作台").navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: WorkspaceHomeRoute.self) { destination in
-            switch destination {
-            case .search: WorkspaceSearchView(onOpenChat: onOpenChat)
-            case .conversations: HistoryView(embedded: true) { onOpenChat(nil) }
-            case .drafts: WorkspaceDraftListView(onOpenChat: onOpenChat)
-            }
-        }
-        .navigationDestination(item: $route) { destination in
-            WorkspaceDetailDestination(destination: destination, profileID: model.activeProfileID, onOpenChat: onOpenChat)
-        }
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .alert("暂时无法打开", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("知道了", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
-        .onChange(of: model.activeProfileID) { _, _ in route = nil; error = nil }
+        .onChange(of: model.activeProfileID) { _, _ in error = nil }
     }
 
     private func action(_ title: String, subtitle: String, icon: String) -> some View {
@@ -116,7 +102,7 @@ struct WorkspaceHomeView: View {
     private func open(_ destination: WorkspaceDestination) {
         do {
             try model.openWorkspaceDestination(destination, profileID: model.activeProfileID)
-            if case .project = destination { route = destination }
+            if case .project = destination { onOpenDetail(destination, model.activeProfileID) }
             else { onOpenChat(nil) }
         } catch { self.error = error.localizedDescription }
     }
