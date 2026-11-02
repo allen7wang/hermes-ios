@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 struct BackupDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
@@ -118,29 +119,63 @@ struct BackupView: View {
             }
             document = nil
         }
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-            pendingArchive = nil
-            preview = nil
-            feedback = nil
-            Task {
-                busy = true
-                defer { busy = false }
-                do {
-                    let url = try result.get()
-                    let archive = try await Task.detached {
-                        let access = url.startAccessingSecurityScopedResource()
-                        defer { if access { url.stopAccessingSecurityScopedResource() } }
-                        return try BackupArchive.read(from: url)
-                    }.value
-                    preview = try model.previewImport(archive)
-                    pendingArchive = archive
-                } catch { show(error) }
+        .sheet(isPresented: $importing) {
+            BackupFilePicker { result in
+                importing = false
+                if let result { readBackup(result) }
             }
+        }
+    }
+
+    private func readBackup(_ result: Result<URL, Error>) {
+        pendingArchive = nil
+        preview = nil
+        feedback = nil
+        Task {
+            busy = true
+            defer { busy = false }
+            do {
+                let url = try result.get()
+                let archive = try await Task.detached {
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    return try BackupArchive.read(from: url)
+                }.value
+                preview = try model.previewImport(archive)
+                pendingArchive = archive
+            } catch { show(error) }
         }
     }
 
     private func show(_ error: Error) {
         failed = true
         feedback = error.localizedDescription
+    }
+}
+
+/// Import a snapshot of the chosen file instead of opening a provider URL in place.
+private struct BackupFilePicker: UIViewControllerRepresentable {
+    let onCompletion: (Result<URL, Error>?) -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.json], asCopy: true)
+        picker.allowsMultipleSelection = false
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(onCompletion: onCompletion) }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onCompletion: (Result<URL, Error>?) -> Void
+        init(onCompletion: @escaping (Result<URL, Error>?) -> Void) { self.onCompletion = onCompletion }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            if let url = urls.first { onCompletion(.success(url)) }
+            else { onCompletion(.failure(BackupError.invalidFile)) }
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { onCompletion(nil) }
     }
 }
