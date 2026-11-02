@@ -182,12 +182,18 @@ final class NativeAcceptanceTests: XCTestCase {
         selectLocalHermesFolder()
         capture("System import picker")
         let file = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "Hermes-Acceptance")).firstMatch
-        XCTAssertTrue(file.waitForExistence(timeout: 10))
-        file.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
-        capture("Selected backup file icon")
+        tapSystemFileControl(file)
+        capture("Selected backup file")
         let picker = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: picker)
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 30), .completed)
+        if XCTWaiter.wait(for: [dismissed], timeout: 10) != .completed {
+            // The cold Files provider can ignore its first tap. Retry only while
+            // the same file is still in the picker; all import assertions follow.
+            capture("System import selection pending before one retry")
+            tapSystemFileControl(file)
+            let retried = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: picker)
+            XCTAssertEqual(XCTWaiter.wait(for: [retried], timeout: 30), .completed)
+        }
         let preview = app.staticTexts["待导入的备份"]
         XCTAssertTrue(preview.waitForExistence(timeout: 15))
         capture("System import preview")
