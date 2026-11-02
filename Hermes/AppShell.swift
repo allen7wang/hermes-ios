@@ -3,7 +3,6 @@ import SwiftUI
 enum WorkspaceNavigationRoute: Hashable {
     case search, conversations, drafts
     case detail(WorkspaceDestination, profileID: UUID)
-    case chat(LocalMessageTarget?)
 }
 
 private enum AppSection: Hashable { case conversations, projects, server, library, settings }
@@ -24,6 +23,8 @@ private struct ConnectionWorkspaceTabs: View {
     @EnvironmentObject private var model: AppModel
     @Binding var section: AppSection
     @State private var workspacePath: [WorkspaceNavigationRoute] = []
+    @State private var showingChat = false
+    @State private var chatTarget: LocalMessageTarget?
     @State private var navigationError: String?
 
     var body: some View {
@@ -40,11 +41,12 @@ private struct ConnectionWorkspaceTabs: View {
                             WorkspaceDraftListView(onOpenChat: openChat)
                         case .detail(let destination, let profileID):
                             WorkspaceDetailDestination(destination: destination, profileID: profileID, onOpenChat: openChat)
-                        case .chat(let target):
-                            ChatView(initialTarget: target)
-                                .toolbar(.hidden, for: .navigationBar)
-                                .toolbar(.hidden, for: .tabBar)
                         }
+                    }
+                    .navigationDestination(isPresented: $showingChat) {
+                        ChatView(initialTarget: chatTarget)
+                            .toolbar(.hidden, for: .navigationBar)
+                            .toolbar(.hidden, for: .tabBar)
                     }
             }.tabItem { Label("工作台", systemImage: "square.grid.2x2") }.tag(AppSection.conversations)
             ProjectWorkspaceView(embedded: true) {
@@ -74,7 +76,8 @@ private struct ConnectionWorkspaceTabs: View {
     }
 
     private func openChat(_ target: LocalMessageTarget?) {
-        workspacePath.append(.chat(target))
+        chatTarget = target
+        showingChat = true
     }
 
     private func openDetail(_ destination: WorkspaceDestination, profileID: UUID) {
