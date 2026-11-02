@@ -160,13 +160,15 @@ final class NativeAcceptanceTests: XCTestCase {
 
     private func selectLocalHermesFolder() {
         XCTAssertTrue(app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].waitForExistence(timeout: 30))
-        if app.buttons["Hermes, Actions Menu"].exists { return }
-        let browse = app.buttons["Browse"]
-        if browse.exists { tapSystemFileControl(browse) }
-        let local = app.buttons["On My iPhone"]
-        if local.waitForExistence(timeout: 5) { tapSystemFileControl(local) }
-        let folder = app.cells["Hermes, Container"]
-        tapSystemFileControl(folder)
+        let currentFolder = app.buttons["Hermes, Actions Menu"]
+        for _ in 0..<4 {
+            // Files can restore the previous folder after its navigation bar appears.
+            // Resolve the current page again instead of waiting on a vanished Browse button.
+            if currentFolder.waitForExistence(timeout: 5) { return }
+            let controls = [app.cells["Hermes, Container"], app.buttons["On My iPhone"], app.buttons["Browse"]]
+            if let next = controls.first(where: { $0.exists && $0.isHittable }) { next.tap() }
+        }
+        XCTAssertTrue(currentFolder.waitForExistence(timeout: 15))
     }
 
     // Swiping the app to reveal a missing control can dismiss the system picker.
