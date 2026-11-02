@@ -6,10 +6,23 @@ enum WorkspaceNavigationRoute: Hashable {
     case chat(LocalMessageTarget?)
 }
 
+private enum AppSection: Hashable { case conversations, projects, server, library, settings }
+
 struct AppShell: View {
     @EnvironmentObject private var model: AppModel
-    private enum Section: Hashable { case conversations, projects, server, library, settings }
-    @State private var section: Section = .conversations
+    @State private var section: AppSection = .conversations
+
+    var body: some View {
+        ConnectionWorkspaceTabs(section: $section)
+            .id(model.activeProfileID)
+    }
+}
+
+// Scope the entire tab controller and its navigation state to one connection.
+// Replacing an individual offscreen navigation stack can retain a stale UIKit bar.
+private struct ConnectionWorkspaceTabs: View {
+    @EnvironmentObject private var model: AppModel
+    @Binding var section: AppSection
     @State private var workspacePath: [WorkspaceNavigationRoute] = []
     @State private var navigationError: String?
 
@@ -33,13 +46,13 @@ struct AppShell: View {
                                 .toolbar(.hidden, for: .tabBar)
                         }
                     }
-            }.tabItem { Label("工作台", systemImage: "square.grid.2x2") }.tag(Section.conversations)
+            }.tabItem { Label("工作台", systemImage: "square.grid.2x2") }.tag(AppSection.conversations)
             ProjectWorkspaceView(embedded: true) {
                 section = .conversations
                 openChat(nil)
-            }.tabItem { Label("项目", systemImage: "folder") }.tag(Section.projects)
+            }.tabItem { Label("项目", systemImage: "folder") }.tag(AppSection.projects)
             RemoteWorkspaceView(embedded: true)
-                .tabItem { Label("服务端", systemImage: "server.rack") }.tag(Section.server)
+                .tabItem { Label("服务端", systemImage: "server.rack") }.tag(AppSection.server)
             MessageLibraryView(embedded: true, onShowDraft: {
                 section = .conversations
                 openChat(nil)
@@ -50,18 +63,14 @@ struct AppShell: View {
                     openChat(target)
                 } catch { navigationError = error.localizedDescription }
             }
-                .tabItem { Label("消息库", systemImage: "books.vertical") }.tag(Section.library)
+                .tabItem { Label("消息库", systemImage: "books.vertical") }.tag(AppSection.library)
             SettingsView(embedded: true)
-                .tabItem { Label("设置", systemImage: "gearshape") }.tag(Section.settings)
+                .tabItem { Label("设置", systemImage: "gearshape") }.tag(AppSection.settings)
         }
         .tint(HermesTheme.accent).preferredColorScheme(.dark)
         .alert("暂时无法打开原文", isPresented: Binding(get: { navigationError != nil }, set: { if !$0 { navigationError = nil } })) {
             Button("知道了", role: .cancel) { navigationError = nil }
         } message: { Text(navigationError ?? "") }
-        .onChange(of: model.activeProfileID) { _, _ in
-            workspacePath = []
-            navigationError = nil
-        }
     }
 
     private func openChat(_ target: LocalMessageTarget?) {

@@ -5,7 +5,7 @@ on:
       scope:
         description: Checks to execute
         type: choice
-        options: [all, native, files, inspect]
+        options: [all, native, navigation, files, inspect]
         default: all
       inspect_run:
         description: Existing run to inspect
@@ -54,6 +54,8 @@ jobs:
           selection=(-project Hermes.xcodeproj -scheme HermesUITests)
           if [ "$HERMES_TEST_SCOPE" = files ]; then
             selection+=("-only-testing:HermesUITests/NativeAcceptanceTests/testNativeSystemFileExportImportConflictsAndFreshInstallation")
+          elif [ "$HERMES_TEST_SCOPE" = navigation ]; then
+            selection+=("-only-testing:HermesUITests/NativeAcceptanceTests/testNativeConnectionChangeClearsDeepWorkspaceNavigation")
           fi
           xcodebuild "${selection[@]}" -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual -onlyUsePackageVersionsFromResolvedFile -parallel-testing-enabled NO -resultBundlePath evidence/NativeAcceptance.xcresult test > evidence/native-acceptance.log 2>&1
       - name: Summarize native interaction results
