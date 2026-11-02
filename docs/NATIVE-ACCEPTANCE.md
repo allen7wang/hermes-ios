@@ -20,9 +20,12 @@ xcrun simctl list devices available
 ```sh
 xcodebuild -project Hermes.xcodeproj -scheme HermesUITests \
   -destination 'platform=iOS Simulator,id=<device-uuid>' \
-  CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO \
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual \
+  -parallel-testing-enabled NO \
   -resultBundlePath NativeAcceptance.xcresult test
 ```
+
+系统文件验收使用模拟器本地 ad-hoc 签名，不需要开发者证书。同一模拟器上先运行 HermesTests 时也使用上述签名参数，避免在同一安装中混用未签名和已签名的 Debug App；Release 构建仍可使用 `CODE_SIGNING_ALLOWED=NO`。
 
 已有模型与布局回归仍使用 HermesTests scheme。CI 入口为 [Native acceptance](../.github/workflows/native-acceptance.yml)，为每次运行创建并清理专用 iPhone 模拟器；上传环境信息、日志、完整 xcresult、结构化摘要、截图和无凭据的辅助功能树。保留期为 14 天，需长期留存的证据应在过期前下载。
 
@@ -42,12 +45,15 @@ xcodebuild -project Hermes.xcodeproj -scheme HermesUITests \
 | 归档和连接范围 | 默认不含归档，打开归档开关后可打开归档对话；回收站和其他连接结果不可见 |
 | 归档限制 | 打开归档对话后存在恢复入口，输入控件不可用 |
 | 草稿持久化 | 编辑后退出 App，重新启动并通过检索打开，核对完整文字 |
+| 切换连接后的导航 | 从检索深入项目详情后切换连接，返回工作台并核对新连接检索范围；切回原连接可继续新对话草稿 |
 | 写入失败保护 | 使用隔离目录制造草稿写入失败，核对错误、切换被拒绝和原输入仍在 |
 | 系统文件往返 | 通过系统选择器保存 JSON，再选择该文件导入并确认合并 |
 | 已有记录冲突 | 导出后修改本机草稿，导入旧备份后核对已有对话数量与新草稿保留 |
 | 空安装恢复 | 新隔离安装通过同一系统文件导入，切换至导入连接，核对原草稿和项目引用 |
 
 每次结果以实际 CI 摘要与截图为准，存在失败时不得把该场景记为通过。
+
+CI 的 `scope=all` 执行完整回归、全部原生用例及 Release 构建；`scope=navigation` 只运行连接切换导航用例，用于定位，不能替代完整验收。原生测试后会立即在运行日志中输出结构化摘要。
 
 ## 真实 API 待验收
 

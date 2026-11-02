@@ -1,0 +1,168 @@
+[
+  {
+    "file": "before-navigation-reset.png",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41293498228",
+    "commit": "81b958d236381f210c6c702cb0beb1a07d455df7",
+    "test": "NativeAcceptanceTests/testNativeConnectionChangeClearsDeepWorkspaceNavigation()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "C32CCE08-B51C-44B8-A50A-187984C160C2",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "4239FEB5-9E5E-400D-8053-74C48D6A9CD0.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Final native screen_0_C84FFB41-C310-4A10-B714-AA38B2925E29.png",
+      "timestamp": 1793526270.455
+    },
+    "sha256": "4c252aaca3323a70d4e5d71d0f0be528bd5903ad6bbbf501ec52733b71e1d1ca"
+  },
+  {
+    "file": "before-native-summary.json",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41293498228",
+    "commit": "81b958d236381f210c6c702cb0beb1a07d455df7",
+    "sha256": "8c07758178387629f73d2bfa878f8ad6667f42263eb71770f428acf01f105aab"
+  },
+  {
+    "file": "full-run-native-summary.json",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41402121548",
+    "commit": "7e08707899648532ad132ec752b003303fe2cbc3",
+    "sha256": "180c51a76122f5ecfb23e3f7212054f486927d12d2b748d1c23366768dc558d6"
+  },
+  {
+    "file": "copy-picker-trial-summary.json",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41409599807",
+    "commit": "74040f4deb8b4abc94761f5a4801381ab9c82e0f",
+    "sha256": "38cd97cf25aa36a5ec0c192335e6a6146c2d39a41cfeac93fc76f224fa9a0d87"
+  },
+  {
+    "file": "regression-summary.json",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "e34f36ed21f6eb2a14ef323a70827e86de1b6d5679ec26b28f373715f8b76dec"
+  },
+  {
+    "file": "native-run-summary.json",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "af853e6986a062bdaf22d97ad7ebd417003fda48daf163bae3014dd77ff9486b"
+  },
+  {
+    "file": "full-run-jobs.json",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "7c8ff0014a46a33c3e42c2a0cbdda2d498585cfa2e7ca810030c3802f78ff2b4"
+  },
+  {
+    "file": "connection-navigation-latest.png",
+    "test": "NativeAcceptanceTests/testNativeConnectionChangeClearsDeepWorkspaceNavigation()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "6384D803-6F13-4E85-9AE3-E8F43140FCDF",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "8006B6B9-1C32-4B62-BA3C-13DB0F93B003.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Connection changes reset workspace navigation_0_7422711C-DA88-40B6-86E1-76590DFDAF1B.png",
+      "timestamp": 1793608206.815
+    },
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "c9c4c11c29f626a6f8b580ff06162a676104554b83dfb2e972e7dae40034ef68"
+  },
+  {
+    "file": "draft-write-failure.png",
+    "test": "NativeAcceptanceTests/testNativeFailedDraftWriteBlocksNewConversationAndKeepsInput()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "6384D803-6F13-4E85-9AE3-E8F43140FCDF",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "E5A34362-12AB-410A-98C0-F8EDFB18C3FD.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Unsaved draft blocks navigation_0_64A2D171-2F90-4B0F-AFB1-A9F76975AD06.png",
+      "timestamp": 1793608261.434
+    },
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "b2147cf45271c95a3e55f322378d1fcb3d552b48ac07390aeb60ab0c77adc237"
+  },
+  {
+    "file": "draft-after-restart.png",
+    "test": "NativeAcceptanceTests/testNativeMessageAndDraftResultsPreserveInputAcrossRestart()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "6384D803-6F13-4E85-9AE3-E8F43140FCDF",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "50F061F3-4CA6-4E36-A9CC-FE767C094816.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Draft restored after process restart_0_77AE8A97-609A-4E9C-B91D-445F2C1C3B11.png",
+      "timestamp": 1793608327.766
+    },
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "c44977946c4d39bedbde5dfad2fe0abc9e864aeed78d9094f29f36440769e1a1"
+  },
+  {
+    "file": "archived-read-only.png",
+    "test": "NativeAcceptanceTests/testNativeProjectDocumentAndArchivedConversationResultsRespectScope()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "6384D803-6F13-4E85-9AE3-E8F43140FCDF",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "B5098265-0549-48DF-B162-E4B54B963767.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Archived result cannot send_0_2946C91D-F882-48F4-807B-D0ACCFE32184.png",
+      "timestamp": 1793608369.966
+    },
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "a9180ab32a18b1032c179f8c238df6d9a4712b272fb9789cbcc2fc96c96f3284"
+  },
+  {
+    "file": "import-selection-pending.png",
+    "test": "NativeAcceptanceTests/testNativeSystemFileExportImportConflictsAndFreshInstallation()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "6384D803-6F13-4E85-9AE3-E8F43140FCDF",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "CC9731C6-2CC6-4371-8A9F-E70C58AFC918.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "System import selection pending before one retry_0_921E1796-AC64-4506-9AD8-1B299AFA187E.png",
+      "timestamp": 1793608462.597
+    },
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "e0aee3ec2586c91cd258a07dcb0ef82863cb39bc7694095dad8f0eeb8e353309"
+  },
+  {
+    "file": "file-provider-diagnostic.txt",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "31c150b36303c668d037d853b739f70f297ee051de4026ecab0c1cb9a40472fa"
+  },
+  {
+    "file": "runtime-diagnostic.txt",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41411899570",
+    "commit": "b5354335858664588be48332e38e994b086108a8",
+    "sha256": "b7060d0564ee9ed192b992b447eca548ef5c5f51ecfbb4ed1b1e424eb05d11be"
+  },
+  {
+    "file": "earlier-backup-run-summary.json",
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41393761381",
+    "commit": "bf011d5034e2b7be46823c11f61540ccf5b6e3be",
+    "sha256": "7db76c15337cbf5e07c2c006ae13bfde824064ef842aa17b88e1859b3a70c4de"
+  },
+  {
+    "file": "earlier-backup-restored.png",
+    "test": "NativeAcceptanceTests/testNativeSystemFileExportImportConflictsAndFreshInstallation()",
+    "attachment": {
+      "configurationName": "Test Scheme Action",
+      "deviceId": "EE4F7DDB-35DD-44AC-A19B-F5ED62EB193D",
+      "deviceName": "Hermes-Acceptance",
+      "exportedFileName": "D4BC2207-EB7F-4544-9F12-763D6858EFD7.png",
+      "isAssociatedWithFailure": false,
+      "suggestedHumanReadableName": "Original draft and project references restored into fresh installation_0_5257EE8B-6D42-4D30-882A-8A7A95410272.png",
+      "timestamp": 1793598127.427
+    },
+    "run_url": "https://github.com/allen7wang/hermes-ios/actions/runs/41393761381",
+    "commit": "bf011d5034e2b7be46823c11f61540ccf5b6e3be",
+    "sha256": "2548ed112ef55fa64d1fdc89231988ec9b1a553def945029cec01391b9b7723f"
+  }
+]

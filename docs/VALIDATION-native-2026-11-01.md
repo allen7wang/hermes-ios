@@ -1,5 +1,7 @@
 # 原生验收记录 · 2026-11-01
 
+本页保留当时的验收结果；后续系统备份往返及连接切换复验见 [2026-11-02 记录](VALIDATION-native-2026-11-02.md)。
+
 任务：[hermes-ios#1](https://github.com/allen7wang/hermes-ios/issues/1)。本轮使用 GitHub macOS runner 上的独立 iPhone 16 Pro / iOS 18.5（22F77）模拟器，Xcode 16.4（16F6）、macOS 15.8.2。操作由 XCUITest 点按、输入及调用系统文件界面完成，不代表真机触摸验收。
 
 ## 当前结果

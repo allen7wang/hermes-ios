@@ -70,6 +70,6 @@ xcodebuild -project Hermes.xcodeproj -scheme Hermes \
 
 完整 **475 项 XCTest** 分别在 Mac Catalyst 与隔离 iPhone 16 Pro / iOS 18.1 通过，均为 0 失败、0 跳过，结果包无 runtimeWarnings；iOS Release 4.0.0 构建通过。新增 19 项领域/模型回归和 3 项布局检查，三张最终布局已逐张检查。完整范围见 [v4 验证记录](docs/VALIDATION-v4.0.0.md)。
 
-本版仍以源码预览交付，无签名 IPA。2026-11-01 补充的 3 项模拟器原生交互已通过，现有 475 项回归与 Release 构建通过；系统导出已成功，系统导入恢复仍在排查，真实 API 与真机触摸尚未验收。详见[补充验收记录](docs/VALIDATION-native-2026-11-01.md)与[复现步骤](docs/NATIVE-ACCEPTANCE.md)。
+本版仍以源码预览交付，无签名 IPA。2026-11-02 复验的 4 项工作台原生交互已通过，修复切换连接后旧详情残留与空白页；现有 475 项回归与 Release 构建通过。系统导出已成功，导入恢复仍出现系统选择器不退出，真实 API 与真机触摸尚未验收。完整原生套件仍有 1 项失败，详见[最新验收记录](docs/VALIDATION-native-2026-11-02.md)与[复现步骤](docs/NATIVE-ACCEPTANCE.md)。
 
 API 格式参考 [Hermes Agent 官方 API Server 文档](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server)。

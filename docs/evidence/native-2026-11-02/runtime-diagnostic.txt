@@ -1,0 +1,4 @@
+Source: https://github.com/allen7wang/hermes-ios/actions/runs/41411899570
+Commit: b5354335858664588be48332e38e994b086108a8
+
+2026-11-02 08:30:48.610 E  Hermes[25280:1195b] [com.apple.UIKit:Assert] Presenting view controller <SwiftUI.PlatformAlertController: 0x103bdba00> from detached view controller <_TtGC7SwiftUI32NavigationStackHostingControllerVS_7AnyView_: 0x10411f000> is not supported, and may result in incorrect safe area insets and a corrupt root presentation. Make sure <_TtGC7SwiftUI32NavigationStackHostingControllerVS_7AnyView_: 0x10411f000> is in the view controller hierarchy before presenting from it. Will become a hard exception in a future release.

@@ -1,0 +1,5 @@
+Source: https://github.com/allen7wang/hermes-ios/actions/runs/41411899570
+Commit: b5354335858664588be48332e38e994b086108a8
+
+2026-11-02 08:34:12.307 E  fileproviderd[3785:f79f] [com.apple.FileProvider:default] [ERROR] Cannot get URL for item ID “localstorage/did=4” for extension com.apple.FileProvider.LocalStorage. Error: NSError: FP -1005 "The file doesn’t exist." UserInfo={NSFileProviderErrorNonExistentItemIdentifier=did=4} }
+2026-11-02 08:34:26.905 E  fileproviderd[3785:15ddd] [com.apple.FileProvider:default] [ERROR] Cannot get URL for item ID “localstorage/did=4” for extension com.apple.FileProvider.LocalStorage. Error: NSError: FP -1005 "The file doesn’t exist." UserInfo={NSFileProviderErrorNonExistentItemIdentifier=did=4} }
