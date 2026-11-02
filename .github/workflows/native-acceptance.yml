@@ -44,7 +44,7 @@ jobs:
         if: ${{ inputs.scope == 'all' || inputs.scope == '' }}
         run: |
           set -euo pipefail
-          xcodebuild -project Hermes.xcodeproj -scheme HermesTests -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO -onlyUsePackageVersionsFromResolvedFile -parallel-testing-enabled NO -resultBundlePath evidence/Regression.xcresult test > evidence/regression.log 2>&1
+          xcodebuild -project Hermes.xcodeproj -scheme HermesTests -destination "platform=iOS Simulator,id=$HERMES_SIMULATOR" -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual -onlyUsePackageVersionsFromResolvedFile -parallel-testing-enabled NO -resultBundlePath evidence/Regression.xcresult test > evidence/regression.log 2>&1
       - name: Run native interaction and system file acceptance
         if: ${{ !cancelled() }}
         env:

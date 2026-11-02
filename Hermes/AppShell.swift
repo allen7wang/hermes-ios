@@ -13,7 +13,6 @@ struct AppShell: View {
         TabView(selection: $section) {
             NavigationStack(path: $workspacePath) {
                 WorkspaceHomeView { target in libraryTarget = target; showingChat = true }
-                    .id(model.activeProfileID)
                     .navigationDestination(isPresented: $showingChat) {
                         ChatView(initialTarget: libraryTarget)
                             .toolbar(.hidden, for: .navigationBar)

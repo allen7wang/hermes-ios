@@ -159,15 +159,22 @@ final class NativeAcceptanceTests: XCTestCase {
     }
 
     private func selectLocalHermesFolder() {
-        _ = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].waitForExistence(timeout: 10)
+        XCTAssertTrue(app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].waitForExistence(timeout: 30))
         if app.buttons["Hermes, Actions Menu"].exists { return }
         let browse = app.buttons["Browse"]
-        if browse.exists { tap(browse) }
+        if browse.exists { tapSystemFileControl(browse) }
         let local = app.buttons["On My iPhone"]
-        if local.waitForExistence(timeout: 3) { tap(local) }
+        if local.waitForExistence(timeout: 5) { tapSystemFileControl(local) }
         let folder = app.cells["Hermes, Container"]
-        XCTAssertTrue(folder.waitForExistence(timeout: 10))
-        folder.tap()
+        tapSystemFileControl(folder)
+    }
+
+    // Swiping the app to reveal a missing control can dismiss the system picker.
+    private func tapSystemFileControl(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(element.waitForExistence(timeout: 15), "Missing system file control: \(element)", file: file, line: line)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed, file: file, line: line)
+        element.tap()
     }
 
     private func importExportedFile() {
@@ -180,7 +187,7 @@ final class NativeAcceptanceTests: XCTestCase {
         capture("Selected backup file icon")
         let picker = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: picker)
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 15), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 30), .completed)
         let preview = app.staticTexts["待导入的备份"]
         XCTAssertTrue(preview.waitForExistence(timeout: 15))
         capture("System import preview")
@@ -198,13 +205,13 @@ final class NativeAcceptanceTests: XCTestCase {
         selectLocalHermesFolder()
         capture("System export picker")
         let name = app.textFields.firstMatch
-        tap(name)
+        tapSystemFileControl(name)
         if let value = name.value as? String {
             name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count))
         }
         name.typeText("Hermes-Acceptance")
         let save = app.buttons.matching(NSPredicate(format: "label IN %@", ["Save", "Move", "Export"])).firstMatch
-        tap(save)
+        tapSystemFileControl(save)
         XCTAssertTrue(app.staticTexts["备份已保存。"].waitForExistence(timeout: 15))
         capture("System export saved")
         // Change the local draft after export; importing the older file must keep this edit.

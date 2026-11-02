@@ -1,5 +1,9 @@
 import SwiftUI
 
+private enum WorkspaceHomeRoute: Hashable {
+    case search, conversations, drafts
+}
+
 struct WorkspaceHomeView: View {
     @EnvironmentObject private var model: AppModel
     let onOpenChat: (LocalMessageTarget?) -> Void
@@ -39,12 +43,10 @@ struct WorkspaceHomeView: View {
                 }.padding(.vertical, 8)
             }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             Section {
-                NavigationLink { WorkspaceSearchView(onOpenChat: onOpenChat) } label: {
+                NavigationLink(value: WorkspaceHomeRoute.search) {
                     action("统一检索", subtitle: "对话、消息、项目、资料与草稿", icon: "magnifyingglass")
                 }.disabled(model.needsRecovery).accessibilityIdentifier("home-search")
-                NavigationLink {
-                    HistoryView(embedded: true) { onOpenChat(nil) }
-                } label: {
+                NavigationLink(value: WorkspaceHomeRoute.conversations) {
                     action("全部对话", subtitle: "筛选、批量整理、归档与回收站", icon: "bubble.left.and.bubble.right")
                 }.accessibilityIdentifier("home-all-conversations")
             }.listRowBackground(HermesTheme.surface)
@@ -54,7 +56,7 @@ struct WorkspaceHomeView: View {
                         .font(.subheadline).foregroundStyle(HermesTheme.muted)
                 }
                 ForEach(Array(drafts.prefix(3))) { item in resultButton(item) }
-                NavigationLink { WorkspaceDraftListView(onOpenChat: onOpenChat) } label: {
+                NavigationLink(value: WorkspaceHomeRoute.drafts) {
                     Label("全部草稿", systemImage: "tray.full").font(.subheadline)
                 }.disabled(model.needsRecovery).accessibilityIdentifier("home-all-drafts")
             } header: { Text("继续草稿 · \(drafts.count)") }
@@ -80,6 +82,13 @@ struct WorkspaceHomeView: View {
         }
         .listStyle(.insetGrouped).scrollContentBackground(.hidden).background(HermesTheme.background)
         .navigationTitle("工作台").navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: WorkspaceHomeRoute.self) { destination in
+            switch destination {
+            case .search: WorkspaceSearchView(onOpenChat: onOpenChat)
+            case .conversations: HistoryView(embedded: true) { onOpenChat(nil) }
+            case .drafts: WorkspaceDraftListView(onOpenChat: onOpenChat)
+            }
+        }
         .navigationDestination(item: $route) { destination in
             WorkspaceDetailDestination(destination: destination, profileID: model.activeProfileID, onOpenChat: onOpenChat)
         }
