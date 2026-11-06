@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 struct RemoteSessionDetailView: View {
     @EnvironmentObject private var model: AppModel
@@ -14,6 +16,8 @@ struct RemoteSessionDetailView: View {
     @State private var jumpRequest: TimelineJumpRequest?
     @State private var showingPrompts = false
     @State private var promptNotice = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var loadingPhoto = false
 
     init(session: RemoteSession, client: HermesClient, draftStore: DraftStore, onChange: @escaping () -> Void) {
         _conversation = StateObject(wrappedValue: RemoteConversationModel(session: session, client: client, draftStore: draftStore))
@@ -50,15 +54,17 @@ struct RemoteSessionDetailView: View {
                     }
                     ForEach(conversation.visibleMessages) { message in
                         RemoteMessageCard(label: label(for: message), text: message.content,
-                                          rendersMarkdown: message.role == "assistant", highlighted: highlightedID == message.id)
+                                          rendersMarkdown: message.role == "assistant", highlighted: highlightedID == message.id,
+                                          failed: message.displayKind == "failed_turn")
                             .id(TimelineAnchor.message(message.id))
                             .contextMenu {
                                 Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.content }
                                 ShareLink(item: message.content) { Label("分享文字", systemImage: "square.and.arrow.up") }
                             }
                     }
-                    if let input = conversation.transientInput {
-                        RemoteMessageCard(label: "我", text: input, rendersMarkdown: false)
+                    if conversation.transientInput != nil || conversation.transientImage != nil {
+                        RemoteMessageCard(label: "我", text: conversation.transientInput ?? "",
+                                          imageData: conversation.transientImage, rendersMarkdown: false)
                     }
                     if !conversation.streamedReply.isEmpty {
                         RemoteMessageCard(label: "Hermes", text: conversation.streamedReply)
@@ -128,6 +134,28 @@ struct RemoteSessionDetailView: View {
             }, scope: "此服务端会话已加载的消息；更早记录需先加载") { searchSelection = $0 }
         }
         .task { await conversation.reload() }
+        .onChange(of: selectedPhoto) { _, item in
+            guard let item else { return }
+            loadingPhoto = true
+            let sessionID = conversation.session.id
+            Task {
+                // 每条退出路径都清 loading，含会话 ID 已变化的早退，避免发送按钮一直禁用。
+                defer {
+                    loadingPhoto = false
+                    if selectedPhoto == item { selectedPhoto = nil }
+                }
+                do {
+                    guard let original = try await item.loadTransferable(type: Data.self) else {
+                        throw ImageAttachmentStore.ImageError.invalidImage
+                    }
+                    guard conversation.session.id == sessionID else { return }
+                    conversation.attachImage(original)
+                } catch {
+                    guard conversation.session.id == sessionID else { return }
+                    conversation.errorMessage = error.localizedDescription
+                }
+            }
+        }
         .onDisappear { conversation.close(); onChange() }
         .alert("重命名服务端会话", isPresented: $editingTitle) {
             TextField("标题", text: $title)
@@ -163,7 +191,7 @@ struct RemoteSessionDetailView: View {
     }
 
     private var timelineToken: String {
-        "\(conversation.messages.last?.id ?? "")|\(conversation.streamedReply.count)|\(conversation.approvals.count)|\(conversation.progress)"
+        "\(conversation.messages.last?.id ?? "")|\(conversation.streamedReply.count)|\(conversation.approvals.count)|\(conversation.progress)|\(conversation.transientImage?.count ?? 0)"
     }
 
     private var composer: some View {
@@ -173,7 +201,35 @@ struct RemoteSessionDetailView: View {
             if promptNotice {
                 Text("已套用提示词，尚未发送。").font(.caption).foregroundStyle(HermesTheme.accent)
             }
+            if let pendingImage = conversation.pendingImage, let preview = UIImage(data: pendingImage) {
+                ZStack(alignment: .topTrailing) {
+                    Image(uiImage: preview)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 110, maxHeight: 110)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Button {
+                        conversation.removePendingImage()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 23))
+                            .foregroundStyle(.white, .black.opacity(0.7))
+                    }
+                    .accessibilityLabel("移除图片")
+                }
+            }
             HStack(alignment: .bottom, spacing: 12) {
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Group {
+                        if loadingPhoto { ProgressView().tint(HermesTheme.accent) }
+                        else { Image(systemName: "photo.badge.plus") }
+                    }
+                    .font(.system(size: 21))
+                    .foregroundStyle(HermesTheme.accent)
+                    .frame(width: 38, height: 44)
+                }
+                .disabled(!conversation.canSend || loadingPhoto)
+                .accessibilityLabel("添加图片")
                 TextField("继续这段服务端会话…", text: $conversation.draft, axis: .vertical)
                     .lineLimit(1...5)
                     .padding(12)
@@ -188,12 +244,17 @@ struct RemoteSessionDetailView: View {
                         .frame(width: 44, height: 44)
                         .background(HermesTheme.accent, in: Circle())
                 }
-                .disabled(!conversation.canSend || busy || conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(conversation.canSend && !busy && !conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0.4)
+                .disabled(!canSendMessage)
+                .opacity(canSendMessage ? 1 : 0.4)
                 .accessibilityLabel("发送到服务端会话")
             }
         }
         .padding(16)
+    }
+
+    private var canSendMessage: Bool {
+        let hasText = !conversation.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return conversation.canSend && !busy && !loadingPhoto && (hasText || conversation.pendingImage != nil)
     }
 
     private func approvalCard(_ approval: RemoteApproval) -> some View {
@@ -238,14 +299,30 @@ struct RemoteSessionDetailView: View {
 private struct RemoteMessageCard: View {
     let label: String
     let text: String
+    var imageData: Data? = nil
     var rendersMarkdown = true
     var highlighted = false
+    var failed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(label).font(.caption.weight(.bold)).foregroundStyle(HermesTheme.accent)
+            if failed {
+                Text("本轮未执行")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
             if highlighted { Label("查找结果", systemImage: "magnifyingglass").font(.caption).foregroundStyle(HermesTheme.accent) }
-            MessageContentView(text: text, rendersMarkdown: rendersMarkdown)
+            if let imageData, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 240, maxHeight: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            if !text.isEmpty || imageData == nil {
+                MessageContentView(text: text, rendersMarkdown: rendersMarkdown)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

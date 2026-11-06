@@ -179,14 +179,14 @@ struct HermesClient {
         guard response.resolved > 0 else { throw ClientError.invalidResponse }
     }
 
-    func streamSession(_ id: String, input: String, onEvent: (SessionStreamEvent) async -> Void) async throws -> SessionStreamResult {
+    func streamSession(_ id: String, input: String, imageData: Data? = nil, onEvent: (SessionStreamEvent) async -> Void) async throws -> SessionStreamResult {
         var urlRequest = authorizedRequest(url: try endpoint("api", "sessions", id, "chat", "stream"))
         urlRequest.httpMethod = "POST"
         urlRequest.timeoutInterval = 600
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         // The server owns this transcript and its configured model; send only the new turn.
-        urlRequest.httpBody = try JSONEncoder().encode(["input": input])
+        urlRequest.httpBody = try SessionChatPayload.body(input: input, imageData: imageData)
         let configuration = sessionConfiguration.copy() as! URLSessionConfiguration
         configuration.timeoutIntervalForRequest = 600
         configuration.timeoutIntervalForResource = 3600
@@ -398,11 +398,12 @@ private struct CompletionMessage: Encodable {
         role = message.role.rawValue
         if let imageID = message.imageID {
             let image = try ImageAttachmentStore.load(imageID, directory: directory)
-            let imageURL = "data:image/jpeg;base64," + image.base64EncodedString()
-            var parts: [Part] = []
-            if !message.content.isEmpty { parts.append(.text(message.content)) }
-            parts.append(.image(imageURL))
-            content = .parts(parts)
+            content = .parts(SessionChatPayload.parts(text: message.content, imageData: image).map { part -> Part in
+                switch part {
+                case .text(let value): return .text(value)
+                case .image(let url): return .image(url)
+                }
+            })
         } else {
             content = .text(message.content)
         }

@@ -12,6 +12,8 @@ final class RemoteConversationModel: ObservableObject {
     @Published private(set) var approvalBusy = false
     @Published private(set) var approvals: [RemoteApproval] = []
     @Published private(set) var transientInput: String?
+    @Published private(set) var pendingImage: Data?
+    @Published private(set) var transientImage: Data?
     @Published private(set) var streamedReply = ""
     @Published private(set) var progress = ""
     @Published var errorMessage: String?
@@ -82,14 +84,32 @@ final class RemoteConversationModel: ObservableObject {
         } catch { if !Task.isCancelled { errorMessage = error.localizedDescription } }
     }
 
+    func attachImage(_ original: Data) {
+        guard canSend else {
+            errorMessage = "正在读取或发送，请稍后再添加图片。"
+            return
+        }
+        do { pendingImage = try ImageAttachmentStore.prepare(original) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func removePendingImage() {
+        pendingImage = nil
+    }
+
     @discardableResult
     func send(_ rawInput: String) -> Bool {
         let input = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canSend, !input.isEmpty else { return false }
+        let imageData = pendingImage
+        guard canSend, !input.isEmpty || imageData != nil else { return false }
+        let sessionAtSend = activeSessionID
+        let knownIDs = Set(messages.map(\.id))
+        pendingImage = nil
         draft = ""
         isSending = true
         isStopping = false
-        transientInput = input
+        transientInput = input.isEmpty ? nil : input
+        transientImage = imageData
         streamedReply = ""
         progress = "Hermes 正在思考…"
         approvals = []
@@ -103,24 +123,48 @@ final class RemoteConversationModel: ObservableObject {
                 sendTask = nil
             }
             do {
-                let result = try await client.streamSession(activeSessionID, input: input) { [weak self] event in
+                let result = try await client.streamSession(sessionAtSend, input: input, imageData: imageData) { [weak self] event in
                     self?.receive(event)
+                }
+                guard activeSessionID == sessionAtSend || activeSessionID == result.sessionID else {
+                    clearTransientAttempt()
+                    return
                 }
                 activeSessionID = result.sessionID
                 streamedReply = result.content
                 progress = "回复已完成"
-                do { try await refreshLatest(); progress = "" }
-                catch { errorMessage = "回复已完成，但记录刷新失败。请点按刷新。" }
+                do {
+                    _ = try await refreshLatest(expectedSession: result.sessionID)
+                    progress = ""
+                } catch {
+                    errorMessage = "回复已完成，但记录刷新失败。请点按刷新。"
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 if case ClientError.sessionCancelled = error {
                     progress = "已停止"
-                } else {
-                    errorMessage = error.localizedDescription
-                    progress = "回复未完成，请刷新确认服务端记录"
+                    clearTransientAttempt()
+                    return
                 }
-                // A failed connection may still have persisted the turn; never resend automatically.
-                try? await refreshLatest()
+                errorMessage = error.localizedDescription
+                progress = "回复未完成，请刷新确认服务端记录"
+                let applied: Bool
+                do {
+                    applied = try await refreshLatest(expectedSession: sessionAtSend)
+                } catch is CancellationError {
+                    return
+                } catch {
+                    if Task.isCancelled { return }
+                    applied = false
+                }
+                guard !Task.isCancelled else { return }
+                let missing = missingParts(knownIDs: knownIDs, input: input, hadImage: imageData != nil, confirmed: applied)
+                if activeSessionID != sessionAtSend || missing.text || missing.image {
+                    restoreUnsentAttempt(
+                        input: missing.text || !applied ? input : "",
+                        imageData: missing.image || !applied ? imageData : nil
+                    )
+                }
             }
         }
         return true
@@ -182,14 +226,46 @@ final class RemoteConversationModel: ObservableObject {
     }
 
     private func refreshLatest() async throws {
-        let page = try await client.sessionMessagePage(activeSessionID)
+        _ = try await refreshLatest(expectedSession: activeSessionID)
+    }
+
+    @discardableResult
+    private func refreshLatest(expectedSession: String) async throws -> Bool {
+        guard activeSessionID == expectedSession else { return false }
+        let page = try await client.sessionMessagePage(expectedSession)
         try Task.checkCancellation()
+        guard activeSessionID == expectedSession else { return false }
         messages = page.data
         nextMessageOffset = page.pagination?.returned ?? page.data.count
         hasOlderMessages = page.hasMore
-        if let id = page.sessionID { activeSessionID = id }
-        transientInput = nil
+        if let id = page.sessionID, id != activeSessionID { activeSessionID = id }
+        clearTransientAttempt()
         streamedReply = ""
+        return true
+    }
+
+    private struct MissingParts {
+        var text = false
+        var image = false
+    }
+
+    private func missingParts(knownIDs: Set<String>, input: String, hadImage: Bool, confirmed: Bool) -> MissingParts {
+        guard confirmed else { return MissingParts(text: !input.isEmpty, image: hadImage) }
+        let fresh = messages.filter { $0.role == "user" && !knownIDs.contains($0.id) }
+        let textSaved = input.isEmpty || fresh.contains { $0.content.contains(input) }
+        let imageSaved = !hadImage || fresh.contains { $0.content.contains("[screenshot]") }
+        return MissingParts(text: !textSaved, image: !imageSaved)
+    }
+
+    private func restoreUnsentAttempt(input: String, imageData: Data?) {
+        clearTransientAttempt()
+        if !input.isEmpty { draft = input }
+        pendingImage = imageData
+    }
+
+    private func clearTransientAttempt() {
+        transientInput = nil
+        transientImage = nil
     }
 
     private func receive(_ event: SessionStreamEvent) {
