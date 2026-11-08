@@ -2,8 +2,14 @@
 
 用 iPhone 或 iPad 连接自己的 Hermes Agent，把持续的讨论、项目资料和待写内容放在一个原生 SwiftUI 工作区中。
 
-**v4.0.0 · 工作台与统一检索** · Xcode 源码预览版，不含签名 IPA。
-[用户指南](docs/USER-GUIDE.md) · [更新记录](CHANGELOG.md) · [v4 验证记录](docs/VALIDATION-v4.0.0.md) · [v1–v3 功能存档](docs/HISTORY-v1-v3.md)
+**v4.0.1 · iOS 模拟器安装预览** · 提供 ARM64 模拟器包，不含真机签名 IPA。
+[下载安装包](https://github.com/allen7wang/hermes-ios/releases/tag/v4.0.1) · [用户指南](docs/USER-GUIDE.md) · [更新记录](CHANGELOG.md) · [本版发布记录](docs/RELEASE-v4.0.1.md) · [v1–v3 功能存档](docs/HISTORY-v1-v3.md)
+
+## 安装模拟器预览版
+
+从 Release 下载 `Hermes-4.0.1-iOS-Simulator-arm64.zip` 并解压。在移动端验收台选择「iOS 模拟器」，启动 / 连接后，通过「安装测试包」选择 `Hermes.app`。该包用于 Apple Silicon Mac 的 iOS 模拟器，不能安装到真实 iPhone。
+
+Release 同时提供 `SHA256SUMS`、`BUILDINFO.json` 和 `INSTALL.txt`，可核对包摘要、源码提交、版本和构建环境。聊天功能需要在 App 中配置自己的 Hermes Agent 服务地址与密钥。
 
 ## 五个入口
 
@@ -44,7 +50,7 @@
 
 本机对话、项目、知识资料、收藏和草稿按连接保存在当前设备；API 密钥分别存入系统钥匙串。发送时，服务端会收到请求正文、选定历史、指令和明确选择的资料；未选择的项目资料不会自动发送。
 
-“服务端”读取和修改服务器保存的会话与任务，与本机对话独立。服务端续聊由服务器管理上下文；当前支持文本输入。停止、审批、运行任务等操作会提交给服务器，断线后请先刷新状态，App 不自动重发消息。
+“服务端”读取和修改服务器保存的会话与任务，与本机对话独立。服务端续聊由服务器管理上下文，支持文字和单张图片输入；历史图片展示以服务端返回内容为准。停止、审批、运行任务等操作会提交给服务器，断线后请先刷新状态，App 不自动重发消息。
 
 远程服务要求 HTTPS。局域网 HTTP 仅接受 `localhost`、`.local` 主机名和私有 IPv4 地址；请使用自己信任的服务地址，并保管 API 密钥。
 
@@ -66,10 +72,22 @@ xcodebuild -project Hermes.xcodeproj -scheme Hermes \
 
 工程可通过 `ruby tools/generate_project.rb` 重新生成；首次构建需解析 MarkdownUI 与 Highlightr 依赖。
 
+从干净的版本标签检出打包：
+
+```sh
+git checkout v4.0.1
+python3 tools/package_simulator.py
+# 输出：build/release-v4.0.1/
+```
+
+打包工具仅生成 ARM64 的 iPhoneSimulator Release 构建，并核对平台、版本、构建号和可执行文件架构。依赖版本以已提交的 `Package.resolved` 为准。
+
 ## 验证与已知边界
 
-完整 **475 项 XCTest** 分别在 Mac Catalyst 与隔离 iPhone 16 Pro / iOS 18.1 通过，均为 0 失败、0 跳过，结果包无 runtimeWarnings；iOS Release 4.0.0 构建通过。新增 19 项领域/模型回归和 3 项布局检查，三张最终布局已逐张检查。完整范围见 [v4 验证记录](docs/VALIDATION-v4.0.0.md)。
+v4.0.1 的构建、回归和安装包验证范围见[本版发布记录](docs/RELEASE-v4.0.1.md)。
 
-本版仍以源码预览交付，无签名 IPA。本轮原生点击、真机触摸、真实 Hermes API 端到端及系统文件往返尚未完成验收；自动测试和隔离布局截图不等同于这些验证。
+v4.0.0 的历史验证：完整 **475 项 XCTest** 分别在 Mac Catalyst 与隔离 iPhone 16 Pro / iOS 18.1 通过，均为 0 失败、0 跳过，结果包无 runtimeWarnings；iOS Release 4.0.0 构建通过。完整范围见 [v4 验证记录](docs/VALIDATION-v4.0.0.md)，不作为 v4.0.1 全量回归结果。
+
+本版提供模拟器预览包，无真机签名 IPA。原生业务流程、真机触摸、真实 Hermes API 端到端及系统文件往返尚未完成验收；自动测试和模拟器启动不等同于这些验证。
 
 API 格式参考 [Hermes Agent 官方 API Server 文档](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server)。
