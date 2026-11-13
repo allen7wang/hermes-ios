@@ -50,7 +50,9 @@ struct RemoteWorkspaceContent: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !isConfigured {
+                if section == 2 {
+                    InboxView(workspace: workspace)
+                } else if !isConfigured {
                     ContentUnavailableView("先连接 Hermes", systemImage: "server.rack",
                         description: Text("在连接管理中填写服务器地址和 API 密钥。"))
                 } else if section == 0 { sessionList }
@@ -61,14 +63,17 @@ struct RemoteWorkspaceContent: View {
                     Picker("服务端内容", selection: $section) {
                         Text("会话").tag(0)
                         Text("定时任务").tag(1)
+                        Text("收件箱").tag(2)
                     }
                     .pickerStyle(.segmented)
                     .frame(height: 36)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(16)
                     if isConfigured {
-                        searchAndFilters
-                        if section == 1 { taskOverview }
+                        if section != 2 {
+                            searchAndFilters
+                            if section == 1 { taskOverview }
+                        }
                         if let notice = workspace.notice {
                             HStack(alignment: .top) {
                                 Text(notice).font(.caption)
@@ -104,7 +109,7 @@ struct RemoteWorkspaceContent: View {
                     Button { Task { await reload() } } label: { Image(systemName: "arrow.clockwise") }
                         .disabled(refreshDisabled).accessibilityLabel("刷新服务端内容")
                 }
-                if isConfigured {
+                if isConfigured && section != 2 {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             if section == 1 { showingNewJob = true }
@@ -365,6 +370,13 @@ struct RemoteWorkspaceContent: View {
     }
 
     private func reload() async {
-        if section == 0 { await workspace.reloadSessions() } else { await workspace.reloadJobs() }
+        if section == 0 {
+            await workspace.reloadSessions()
+        } else if section == 1 {
+            await workspace.reloadJobs()
+        } else {
+            await workspace.reloadJobs()
+            if workspace.sessions.isEmpty { await workspace.reloadSessions() }
+        }
     }
 }

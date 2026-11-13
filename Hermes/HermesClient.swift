@@ -74,6 +74,10 @@ struct HermesClient {
         return try await request(RemoteSessionPage.self, url: components.url!)
     }
 
+    func session(_ id: String) async throws -> RemoteSession {
+        try await request(RemoteSessionResponse.self, url: endpoint("api", "sessions", id)).session
+    }
+
     func sessionMessages(_ id: String) async throws -> [RemoteMessage] {
         try await sessionMessagePage(id).data
     }

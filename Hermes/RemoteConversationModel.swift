@@ -2,6 +2,24 @@ import Foundation
 
 @MainActor
 final class RemoteConversationModel: ObservableObject {
+    private struct ActiveKey: Hashable {
+        let profileID: UUID?
+        let serverURL: String
+        let sessionID: String
+    }
+
+    private static var activeModels: [ActiveKey: RemoteConversationModel] = [:]
+
+    static func open(session: RemoteSession, client: HermesClient, draftStore: DraftStore?) -> RemoteConversationModel {
+        let key = ActiveKey(profileID: client.settings.profileID,
+                            serverURL: client.settings.serverURL, sessionID: session.id)
+        return activeModels[key] ?? RemoteConversationModel(session: session, client: client, draftStore: draftStore)
+    }
+
+    static func hasActiveRun(profileID: UUID) -> Bool {
+        activeModels.keys.contains { $0.profileID == profileID }
+    }
+
     @Published private(set) var session: RemoteSession
     @Published private(set) var messages: [RemoteMessage] = []
     @Published private(set) var isLoading = false
@@ -35,12 +53,14 @@ final class RemoteConversationModel: ObservableObject {
                 try draftStore?.move(from: DraftStore.remoteKey(settings: client.settings, sessionID: oldValue), to: draftKey)
                 if let draftStore { draft = draftStore.text(for: draftKey) }
             } catch { errorMessage = "草稿保存失败：\(error.localizedDescription)" }
+            if isSending { registerActiveRun() }
         }
     }
     private var draftKey: String { DraftStore.remoteKey(settings: client.settings, sessionID: activeSessionID) }
     private var nextMessageOffset = 0
     private var runID: String?
     private var sendTask: Task<Void, Never>?
+    private var revisionOverridesRestore = false
 
     var visibleMessages: [RemoteMessage] { messages.filter(\.isVisible) }
     var canSend: Bool { !isSending && !isLoading && !isLoadingOlder }
@@ -114,13 +134,22 @@ final class RemoteConversationModel: ObservableObject {
         progress = "Hermes 正在思考…"
         approvals = []
         runID = nil
+        registerActiveRun()
         sendTask = Task {
             defer {
                 isSending = false
                 isStopping = false
+                // A session SSE disconnect interrupts its run on the server. An observed
+                // approval cannot be resumed once this stream ends, even on network failure.
+                for approval in approvals {
+                    do { try InboxStore.remove(id: approval.id, profileID: client.settings.profileID) }
+                    catch { errorMessage = "收件箱清理失败：\(error.localizedDescription)" }
+                }
                 approvals = []
                 runID = nil
                 sendTask = nil
+                revisionOverridesRestore = false
+                Self.activeModels = Self.activeModels.filter { $0.value !== self }
             }
             do {
                 let result = try await client.streamSession(sessionAtSend, input: input, imageData: imageData) { [weak self] event in
@@ -133,6 +162,7 @@ final class RemoteConversationModel: ObservableObject {
                 activeSessionID = result.sessionID
                 streamedReply = result.content
                 progress = "回复已完成"
+                recordInbox(id: "finished:" + (runID ?? result.sessionID), runID: runID, kind: .finished, title: "回复已完成", detail: snippet(result.content))
                 do {
                     _ = try await refreshLatest(expectedSession: result.sessionID)
                     progress = ""
@@ -146,6 +176,7 @@ final class RemoteConversationModel: ObservableObject {
                     clearTransientAttempt()
                     return
                 }
+                recordInbox(id: "failed:" + (runID ?? sessionAtSend), runID: runID, kind: .failed, title: "回复失败", detail: snippet(error.localizedDescription))
                 errorMessage = error.localizedDescription
                 progress = "回复未完成，请刷新确认服务端记录"
                 let applied: Bool
@@ -170,21 +201,34 @@ final class RemoteConversationModel: ObservableObject {
         return true
     }
 
-    func stop() async {
-        guard isSending, !isStopping else { return }
+    @discardableResult
+    func stop() async -> Bool {
+        guard isSending, !isStopping else { return false }
         guard let runID else {
+            pendingImage = transientImage
             sendTask?.cancel()
             progress = "已取消连接，请刷新确认记录"
-            return
+            return true
         }
         isStopping = true
         do {
             try await client.stopRun(runID)
             progress = "正在停止…"
+            return true
         } catch {
             isStopping = false
             errorMessage = error.localizedDescription
+            return false
         }
+    }
+
+    @discardableResult
+    func stopAndPlaceInDraft(_ text: String) async -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, await stop() else { return false }
+        if isSending { revisionOverridesRestore = true }
+        draft = trimmed
+        return true
     }
 
     func resolve(_ approval: RemoteApproval, choice: String) async {
@@ -193,8 +237,10 @@ final class RemoteConversationModel: ObservableObject {
         defer { approvalBusy = false }
         do {
             try await client.resolveApproval(approval, choice: choice)
+            do { try InboxStore.remove(id: approval.id, profileID: client.settings.profileID) }
+            catch { errorMessage = "审批已提交，但收件箱清理失败：\(error.localizedDescription)" }
             approvals.removeAll { $0.id == approval.id }
-            progress = choice == "deny" ? "已拒绝，等待服务端继续…" : "已允许本次操作，正在继续…"
+            progress = approvalProgress(for: choice)
         } catch { errorMessage = error.localizedDescription }
     }
 
@@ -215,14 +261,6 @@ final class RemoteConversationModel: ObservableObject {
             return true
         }
         catch { errorMessage = error.localizedDescription; return false }
-    }
-
-    func close() {
-        if let runID {
-            let client = client
-            Task { try? await client.stopRun(runID) }
-        }
-        sendTask?.cancel()
     }
 
     private func refreshLatest() async throws {
@@ -259,8 +297,20 @@ final class RemoteConversationModel: ObservableObject {
 
     private func restoreUnsentAttempt(input: String, imageData: Data?) {
         clearTransientAttempt()
-        if !input.isEmpty { draft = input }
+        if !revisionOverridesRestore && !input.isEmpty {
+            if draft.isEmpty { draft = input }
+            else if draft != input {
+                draft = input + "\n\n" + draft
+                errorMessage = "发送失败：已保留原输入和你新写的草稿，请检查后再发送。"
+            }
+        }
         pendingImage = imageData
+    }
+
+    private func registerActiveRun() {
+        let key = ActiveKey(profileID: client.settings.profileID,
+                            serverURL: client.settings.serverURL, sessionID: activeSessionID)
+        Self.activeModels[key] = self
     }
 
     private func clearTransientAttempt() {
@@ -275,8 +325,57 @@ final class RemoteConversationModel: ObservableObject {
         case .progress(let text), .commentary(let text): progress = text
         case .sessionChanged(let id): activeSessionID = id
         case .approval(let approval):
-            if !approvals.contains(where: { $0.id == approval.id }) { approvals.append(approval) }
+            if !approvals.contains(where: { $0.id == approval.id }) {
+                approvals.append(approval)
+                recordInbox(
+                    id: approval.id,
+                    runID: approval.runID,
+                    requestID: approval.requestID,
+                    command: approval.command,
+                    choices: approval.choices,
+                    kind: .approval,
+                    title: "需要审批",
+                    detail: snippet(approval.description ?? approval.command ?? "等待你的决定")
+                )
+            }
             progress = "需要你的审批"
         }
+    }
+
+    private func approvalProgress(for choice: String) -> String {
+        switch choice {
+        case "deny": return "已拒绝，等待服务端继续…"
+        case "session": return "已允许本次会话，正在继续…"
+        case "always": return "已始终允许，正在继续…"
+        default: return "已允许本次操作，正在继续…"
+        }
+    }
+
+    private func recordInbox(id: String, runID: String?, requestID: String? = nil,
+                             command: String? = nil, choices: [String]? = nil,
+                             kind: InboxItem.Kind, title: String, detail: String) {
+        do {
+            try InboxStore.upsert(InboxItem(
+                id: id,
+                profileID: client.settings.profileID,
+                sessionID: activeSessionID,
+                sessionTitle: session.displayTitle,
+                runID: runID,
+                requestID: requestID,
+                command: command,
+                choices: choices,
+                kind: kind,
+                title: title,
+                detail: detail,
+                createdAt: Date()
+            ))
+        } catch { errorMessage = "收件箱保存失败：\(error.localizedDescription)" }
+    }
+
+    private func snippet(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "无更多说明" }
+        if trimmed.count <= 160 { return trimmed }
+        return String(trimmed.prefix(160))
     }
 }

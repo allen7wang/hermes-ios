@@ -1,0 +1,252 @@
+[
+  {
+    "key": "moshi",
+    "name": "Moshi: herdr/tmux on SSH/MOSH",
+    "seller": "Moshi Tech Limited",
+    "n": 619,
+    "rating": 4.74475,
+    "version": "4.3.2",
+    "released": "2026-11-09T19:32:45Z",
+    "url": "https://apps.apple.com/us/app/moshi-herdr-tmux-on-ssh-mosh/id6757859949?uo=4"
+  },
+  {
+    "key": "hermex",
+    "name": "Hermex",
+    "seller": "Uzair Ansar",
+    "n": 222,
+    "rating": 4.77928,
+    "version": "2.1",
+    "released": "2026-11-09T15:53:24Z",
+    "url": "https://apps.apple.com/us/app/hermex/id6767006319?uo=4"
+  },
+  {
+    "key": "t3",
+    "name": "T3 Code - Remote Claude & more",
+    "seller": "T3 Tools, Inc.",
+    "n": 219,
+    "rating": 4.90411,
+    "version": "2.3.0",
+    "released": "2026-11-10T17:22:29Z",
+    "url": "https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824?uo=4"
+  },
+  {
+    "key": "paseo",
+    "name": "Paseo - Remote Coding Agents",
+    "seller": "Mohamed Boudra Ziani",
+    "n": 115,
+    "rating": 4.92174,
+    "version": "0.15.4",
+    "released": "2026-11-10T17:18:35Z",
+    "url": "https://apps.apple.com/us/app/paseo-remote-coding-agents/id6758887924?uo=4"
+  },
+  {
+    "key": "conduit",
+    "name": "Hermes Conduit",
+    "seller": "Long Cheung Ho",
+    "n": 53,
+    "rating": 4.73585,
+    "version": "2.3.0",
+    "released": "2026-11-09T14:09:42Z",
+    "url": "https://apps.apple.com/us/app/hermes-conduit/id6790977764?uo=4"
+  },
+  {
+    "key": "codex_relay",
+    "name": "Codex Relay - Remote Codex App",
+    "seller": "Kang Sungyu",
+    "n": 59,
+    "rating": 4.22034,
+    "version": "1.6.2",
+    "released": "2026-10-10T23:18:33Z",
+    "url": "https://apps.apple.com/us/app/codex-relay-remote-codex-app/id6764463488?uo=4"
+  },
+  {
+    "key": "happier",
+    "name": "Happier - Remote Claude, Codex",
+    "seller": "Leeroy Brun",
+    "n": 16,
+    "rating": 4.375,
+    "version": "0.2.21",
+    "released": "2026-11-05T06:14:21Z",
+    "url": "https://apps.apple.com/us/app/happier-remote-claude-codex/id6758554297?uo=4"
+  },
+  {
+    "key": "servercc",
+    "name": "ServerCC - Claude Code & Codex",
+    "seller": "佳琳 刘",
+    "n": 7,
+    "rating": 4.71429,
+    "version": "2.2.1",
+    "released": "2026-10-30T20:51:28Z",
+    "url": "https://apps.apple.com/us/app/servercc-claude-code-codex/id6759306046?uo=4"
+  },
+  {
+    "key": "pocketctl",
+    "name": "pocketctl",
+    "seller": "Beijing Lea Lea Information Technology Co., Ltd.",
+    "n": 1,
+    "rating": 5,
+    "version": "2.2.1",
+    "released": "2026-11-05T23:03:00Z",
+    "url": "https://apps.apple.com/us/app/pocketctl/id6778710005?uo=4"
+  },
+  {
+    "key": "dsh_mobile",
+    "name": "DSH Mobile-DeepSeek Harness",
+    "seller": "DIGITAL BANG INTELLIGENCE LLC",
+    "n": 1,
+    "rating": 5,
+    "version": "1.0",
+    "released": "2026-11-07T00:36:40Z",
+    "url": "https://apps.apple.com/us/app/dsh-mobile-deepseek-harness/id6829688051?uo=4"
+  },
+  {
+    "key": "dsh_pocket",
+    "name": "Pocket for DSH",
+    "seller": "嘉奇 龙",
+    "n": 0,
+    "rating": 0,
+    "version": "1.0.5",
+    "released": "2026-11-11T01:36:09Z",
+    "url": "https://apps.apple.com/us/app/pocket-for-dsh/id6832288744?uo=4"
+  },
+  {
+    "key": "fish",
+    "name": "Fish Pocket: DSH Agent",
+    "seller": "士浩 王",
+    "n": 6,
+    "rating": 5,
+    "version": "1.1.0",
+    "released": "2026-11-11T00:58:28Z",
+    "url": "https://apps.apple.com/us/app/fish-pocket-dsh-agent/id6830703602?uo=4"
+  },
+  {
+    "key": "whale",
+    "name": "掌中鲸",
+    "seller": "丰智 李",
+    "n": 2,
+    "rating": 3,
+    "version": "1.0",
+    "released": "2026-08-23T00:44:02Z",
+    "url": "https://apps.apple.com/us/app/%E6%8E%8C%E4%B8%AD%E9%B2%B8/id6801499896?uo=4"
+  },
+  {
+    "key": "aihub",
+    "name": "AI-HUB Desktop",
+    "seller": "昌益 罗",
+    "n": 0,
+    "rating": 0,
+    "version": "1.9",
+    "released": "2026-11-12T00:39:21Z",
+    "url": "https://apps.apple.com/us/app/ai-hub-desktop/id6821681438?uo=4"
+  },
+  {
+    "key": "fatfish",
+    "name": "Fat Fish Dsh",
+    "seller": "Mixx.Space Technology Co., Ltd.",
+    "n": 0,
+    "rating": 0,
+    "version": "1.0",
+    "released": "2026-11-09T23:07:36Z",
+    "url": "https://apps.apple.com/us/app/fat-fish-dsh/id6832401649?uo=4"
+  },
+  {
+    "key": "lody",
+    "name": "Lody - Run Code Agent Anywhere",
+    "seller": "Shanghai Zhouchan Information Technology Co., Ltd.",
+    "n": 7,
+    "rating": 4.85714,
+    "version": "0.111.1",
+    "released": "2026-11-11T01:08:45Z",
+    "url": "https://apps.apple.com/us/app/lody-run-code-agent-anywhere/id6761373528?uo=4"
+  },
+  {
+    "key": "pilot",
+    "name": "HermesPilot - For Hermes Users",
+    "seller": "Yang Hangbin",
+    "n": 27,
+    "rating": 4.55556,
+    "version": "1.6.7",
+    "released": "2026-11-11T22:00:06Z",
+    "url": "https://apps.apple.com/us/app/hermespilot-for-hermes-users/id6765671330?uo=4"
+  },
+  {
+    "key": "hq",
+    "name": "Hermes HQ",
+    "seller": "Charles McDowell",
+    "n": 3,
+    "rating": 5,
+    "version": "1.0.2",
+    "released": "2026-11-11T00:59:51Z",
+    "url": "https://apps.apple.com/us/app/hermes-hq/id6816242629?uo=4"
+  },
+  {
+    "key": "ermis",
+    "name": "ERMIS - Client for Hermes",
+    "seller": "Ilya Vishneuski",
+    "n": 4,
+    "rating": 4,
+    "version": "2.0.0",
+    "released": "2026-11-01T03:48:43Z",
+    "url": "https://apps.apple.com/us/app/ermis-client-for-hermes/id6759341434?uo=4"
+  },
+  {
+    "key": "opencode",
+    "name": "OpenCode Mobile App",
+    "seller": "Rodrigo Mendoza",
+    "n": 15,
+    "rating": 1.8,
+    "version": "1.2",
+    "released": "2026-03-16T23:10:54Z",
+    "url": "https://apps.apple.com/us/app/opencode-mobile-app/id6757406313?uo=4"
+  },
+  {
+    "key": "orca",
+    "name": "Orca IDE",
+    "seller": "Lovecast LLC",
+    "n": 78,
+    "rating": 4.66667,
+    "version": "0.0.63",
+    "released": "2026-11-04T18:07:41Z",
+    "url": "https://apps.apple.com/us/app/orca-ide/id6766130217?uo=4"
+  },
+  {
+    "key": "clawpilot",
+    "name": "ClawPilot - For AI Agent Users",
+    "seller": "Yang Hangbin",
+    "n": 6,
+    "rating": 5,
+    "version": "1.3.7",
+    "released": "2026-06-12T17:08:05Z",
+    "url": "https://apps.apple.com/us/app/clawpilot-for-ai-agent-users/id6759454716?uo=4"
+  },
+  {
+    "key": "remotepi",
+    "name": "Remote Pi - Coding Agent",
+    "seller": "Jacob Moura",
+    "n": 6,
+    "rating": 5,
+    "version": "1.2.0",
+    "released": "2026-07-17T03:36:16Z",
+    "url": "https://apps.apple.com/us/app/remote-pi-coding-agent/id6773499691?uo=4"
+  },
+  {
+    "key": "sesori",
+    "name": "Sesori: Remote AI Coding Agent",
+    "seller": "DigitalBlock Labs LTD",
+    "n": 3,
+    "rating": 5,
+    "version": "1.12.0",
+    "released": "2026-11-11T16:10:06Z",
+    "url": "https://apps.apple.com/us/app/sesori-remote-ai-coding-agent/id6760642500?uo=4"
+  },
+  {
+    "key": "hermes_cli",
+    "name": "Hermes-cli: AI Agent HQ Mobile",
+    "seller": "Hefei Jiniangu Technology Co., Ltd.",
+    "n": 0,
+    "rating": 0,
+    "version": "1.1.6",
+    "released": "2026-08-01T05:15:59Z",
+    "url": "https://apps.apple.com/us/app/hermes-cli-ai-agent-hq-mobile/id6761011337?uo=4"
+  }
+]

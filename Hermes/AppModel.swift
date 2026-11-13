@@ -193,6 +193,8 @@ final class AppModel: ObservableObject {
         guard !isSending else { throw ProfileError.sending }
         guard !storageLoadFailed else { throw ProfileError.storageUnavailable }
         guard let profile = profiles.first(where: { $0.id == id }) else { return }
+        guard !RemoteConversationModel.hasActiveRun(profileID: id) else { throw ProfileError.sending }
+        try InboxStore.removeAll(profileID: id)
         try credentials.save("", account: profile.credentialAccount)
         try draftStore.remove(profileID: id)
         let removedImages = Set(allConversations.filter({ $0.profileID == id }).flatMap({ $0.messages.compactMap(\.imageID) }))

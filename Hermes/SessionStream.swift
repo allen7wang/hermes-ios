@@ -18,6 +18,8 @@ struct RemoteApproval: Identifiable, Decodable {
 
     var id: String { requestID ?? (runID + ":" + (command ?? description ?? "")) }
     var allowsOnce: Bool { choices?.contains("once") ?? true }
+    var allowsSession: Bool { choices?.contains("session") ?? false }
+    var allowsAlways: Bool { choices?.contains("always") ?? false }
 
     enum CodingKeys: String, CodingKey {
         case command, description, choices
@@ -108,5 +110,32 @@ struct SessionStreamDecoder {
             case toolName = "tool_name"
             case turnExitReason = "turn_exit_reason"
         }
+    }
+}
+
+enum ApprovalPathParser {
+    /// Tokens that look like paths: contain `/` or start with `~`. Not a server diff.
+    static func paths(in command: String) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for raw in command.split(whereSeparator: \.isWhitespace) {
+            let token = normalize(String(raw))
+            guard token.contains("/") || token.hasPrefix("~") else { continue }
+            if seen.insert(token).inserted { result.append(token) }
+        }
+        return result
+    }
+
+    private static func normalize(_ raw: String) -> String {
+        var token = raw
+        let leading = CharacterSet(charactersIn: "\"'`([{")
+        let trailing = CharacterSet(charactersIn: "\"'`)]},;:")
+        while let scalar = token.unicodeScalars.first, leading.contains(scalar) {
+            token.unicodeScalars.removeFirst()
+        }
+        while let scalar = token.unicodeScalars.last, trailing.contains(scalar) {
+            token.unicodeScalars.removeLast()
+        }
+        return token
     }
 }

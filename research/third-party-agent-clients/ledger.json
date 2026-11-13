@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": 1,
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "DeepSeek Harness (`dsh`) is an open-source agent harness developed by DeepSeek AI.",
+          "added": "2026-11-13"
+        },
+        {
+          "text": "The command starts the Web UI at `http://127.0.0.1:3080` by default",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "url": "https://apps.apple.com/us/app/hermex/id6767006319?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "Hermex is a native iPhone and iPad client for your self-hosted Hermes agent.",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "url": "https://apps.apple.com/us/app/hermes-conduit/id6790977764?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "Hermes Conduit is an independent client for your own Hermes agent, on iPhone, iPad, Mac and Apple Watch.",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "url": "https://apps.apple.com/us/app/moshi-herdr-tmux-on-ssh-mosh/id6757859949?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "A mobile terminal designed for AI coding agents.",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "url": "https://apps.apple.com/us/app/paseo-remote-coding-agents/id6758887924?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "Run Claude Code, Codex, and OpenCode on your machine from your phone.",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "url": "https://apps.apple.com/us/app/happier-remote-claude-codex/id6758554297?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "Your agent asks to run a command and you get a push notification with Allow and Deny on it.",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "url": "https://apps.apple.com/us/app/%E6%8E%8C%E4%B8%AD%E9%B2%B8/id6801499896?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "Scan the QR code shown by the computer companion app to connect instantly",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "url": "https://apps.apple.com/us/app/ai-hub-desktop/id6821681438?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "AI-HUB is a third-party client and is not affiliated with DeepSeek.",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "url": "https://apps.apple.com/us/app/dsh-mobile-deepseek-harness/id6829688051?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "DSH Mobile lets you continue conversations, follow task progress and approve what the AI agent wants to do",
+          "added": "2026-11-13"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "url": "https://apps.apple.com/us/app/pocket-for-dsh/id6832288744?uo=4",
+      "title": "",
+      "accessed": "2026-11-13",
+      "quotes": [
+        {
+          "text": "Install the dsh-pocket plugin on your Mac, scan its QR code, and continue your coding sessions from your phone",
+          "added": "2026-11-13"
+        }
+      ]
+    }
+  ]
+}

@@ -59,6 +59,16 @@ struct SettingsView: View {
                         editingID = nil
                         showingEditor = true
                     } label: { Label("添加连接", systemImage: "plus.circle") }
+                    NavigationLink {
+                        PairingCodeView()
+                    } label: {
+                        Label("显示配对码", systemImage: "qrcode")
+                    }
+                    NavigationLink {
+                        PairingScanView()
+                    } label: {
+                        Label("扫码添加连接", systemImage: "qrcode.viewfinder")
+                    }
                 }
                 .disabled(model.isSending)
                 .listRowBackground(HermesTheme.surface)

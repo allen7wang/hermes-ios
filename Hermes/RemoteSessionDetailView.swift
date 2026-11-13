@@ -18,9 +18,10 @@ struct RemoteSessionDetailView: View {
     @State private var promptNotice = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var loadingPhoto = false
+    @State private var revision = ""
 
     init(session: RemoteSession, client: HermesClient, draftStore: DraftStore, onChange: @escaping () -> Void) {
-        _conversation = StateObject(wrappedValue: RemoteConversationModel(session: session, client: client, draftStore: draftStore))
+        _conversation = StateObject(wrappedValue: RemoteConversationModel.open(session: session, client: client, draftStore: draftStore))
         self.onChange = onChange
     }
 
@@ -78,14 +79,16 @@ struct RemoteSessionDetailView: View {
                             Text(conversation.progress)
                                 .font(.caption).foregroundStyle(HermesTheme.muted)
                             Spacer()
-                            if conversation.isSending {
-                                Button(conversation.isStopping ? "正在停止" : "停止") {
-                                    Task { await conversation.stop() }
-                                }
-                                .disabled(conversation.isStopping)
-                            }
                         }
                         .id("progress")
+                    }
+                    if conversation.isSending {
+                        Button(conversation.isStopping ? "正在停止" : "停止") {
+                            Task { await conversation.stop() }
+                        }
+                        .disabled(conversation.isStopping)
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel("停止")
                     }
                 }
                 .padding(16)
@@ -156,7 +159,8 @@ struct RemoteSessionDetailView: View {
                 }
             }
         }
-        .onDisappear { conversation.close(); onChange() }
+        // Keep the stream alive so an approval can be handled from the inbox after leaving this screen.
+        .onDisappear { onChange() }
         .alert("重命名服务端会话", isPresented: $editingTitle) {
             TextField("标题", text: $title)
             Button("取消", role: .cancel) {}
@@ -201,6 +205,9 @@ struct RemoteSessionDetailView: View {
             if promptNotice {
                 Text("已套用提示词，尚未发送。").font(.caption).foregroundStyle(HermesTheme.accent)
             }
+            if conversation.isSending || !conversation.approvals.isEmpty {
+                revisionField
+            }
             if let pendingImage = conversation.pendingImage, let preview = UIImage(data: pendingImage) {
                 ZStack(alignment: .topTrailing) {
                     Image(uiImage: preview)
@@ -235,6 +242,14 @@ struct RemoteSessionDetailView: View {
                     .padding(12)
                     .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 16))
                     .accessibilityLabel("服务端会话消息")
+                if conversation.isSending {
+                    Button(conversation.isStopping ? "正在停止" : "停止") {
+                        Task { await conversation.stop() }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .disabled(conversation.isStopping)
+                    .accessibilityLabel("停止")
+                }
                 Button {
                     if conversation.send(conversation.draft) { promptNotice = false }
                 } label: {
@@ -257,6 +272,29 @@ struct RemoteSessionDetailView: View {
         return conversation.canSend && !busy && !loadingPhoto && (hasText || conversation.pendingImage != nil)
     }
 
+    private var revisionField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("停止后放进输入框，需你再发送。不会插入当前这一轮。")
+                .font(.caption2)
+                .foregroundStyle(HermesTheme.muted)
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField("改口内容", text: $revision, axis: .vertical)
+                    .lineLimit(1...3)
+                    .font(.subheadline)
+                    .padding(8)
+                    .background(HermesTheme.background, in: RoundedRectangle(cornerRadius: 12))
+                Button("停止并放进输入框") {
+                    let text = revision
+                    Task {
+                        if await conversation.stopAndPlaceInDraft(text) { revision = "" }
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .disabled(conversation.isStopping || revision.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
     private func approvalCard(_ approval: RemoteApproval) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("需要你的审批", systemImage: "hand.raised.fill").font(.headline)
@@ -264,19 +302,44 @@ struct RemoteSessionDetailView: View {
             if let command = approval.command {
                 Text(command).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
             }
-            HStack(spacing: 18) {
+            approvalPaths(approval)
+            VStack(alignment: .leading, spacing: 8) {
                 if approval.allowsOnce {
                     Button("允许本次") { Task { await conversation.resolve(approval, choice: "once") } }
+                }
+                if approval.allowsSession && approval.command?.isEmpty == false {
+                    Button("本次会话允许") { Task { await conversation.resolve(approval, choice: "session") } }
+                }
+                if approval.allowsAlways && approval.command?.isEmpty == false {
+                    Button("始终允许") { Task { await conversation.resolve(approval, choice: "always") } }
                 }
                 Button("拒绝", role: .destructive) { Task { await conversation.resolve(approval, choice: "deny") } }
                 if conversation.approvalBusy { ProgressView() }
             }
             .disabled(conversation.approvalBusy || conversation.isStopping)
-            .buttonStyle(.borderless)
+            .buttonStyle(.bordered)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(HermesTheme.raised, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    @ViewBuilder
+    private func approvalPaths(_ approval: RemoteApproval) -> some View {
+        let paths = ApprovalPathParser.paths(in: approval.command ?? "")
+        if paths.isEmpty {
+            Text("服务端没有返回文件差异")
+                .font(.caption)
+                .foregroundStyle(HermesTheme.muted)
+        } else {
+            Text("命令里的路径")
+                .font(.caption.weight(.semibold))
+            ForEach(paths, id: \.self) { path in
+                Text(path)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+        }
     }
 
     private func label(for message: RemoteMessage) -> String {

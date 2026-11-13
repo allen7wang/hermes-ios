@@ -82,6 +82,9 @@ final class ConnectionTests: XCTestCase {
     @MainActor
     func testDeletingProfileRemovesOnlyItsKeysHistoryAndLocalAndRemoteDrafts() throws {
         let fixture = try makeFixture()
+        let previousInboxURL = InboxStore.storageURL
+        InboxStore.storageURL = fixture.directory.appendingPathComponent("inbox-items.json")
+        defer { InboxStore.storageURL = previousInboxURL }
         let old = Conversation(title: "待删除", messages: [], updatedAt: Date())
         try JSONEncoder().encode([old]).write(to: fixture.directory.appendingPathComponent("conversations.json"))
         let model = fixture.model()
@@ -92,7 +95,16 @@ final class ConnectionTests: XCTestCase {
         try model.draftStore.set("远端草稿", for: remoteKey)
         let work = try model.saveProfile(id: nil, name: "工作", connection: settings("work.test", key: "work-secret"))
         model.draft = "保留这个"
+        let homeItem = InboxItem(id: "shared", profileID: home, sessionID: "home-session", sessionTitle: "家中",
+                                 runID: nil, requestID: nil, command: nil, choices: nil, kind: .finished,
+                                 title: "家中结果", detail: "已完成", createdAt: Date())
+        var workItem = homeItem
+        workItem.profileID = work
+        try InboxStore.upsert(homeItem)
+        try InboxStore.upsert(workItem)
         try model.removeProfile(home)
+        XCTAssertTrue(try InboxStore.items(profileID: home).isEmpty)
+        XCTAssertEqual(try InboxStore.items(profileID: work), [workItem])
         XCTAssertNil(fixture.keys.values[homeAccount])
         XCTAssertEqual(model.draftStore.text(for: remoteKey), "")
         XCTAssertEqual(model.activeProfileID, work)
@@ -102,6 +114,7 @@ final class ConnectionTests: XCTestCase {
         XCTAssertTrue(reloaded.conversations.isEmpty)
         XCTAssertEqual(reloaded.settings.apiKey, "work-secret")
         try reloaded.removeProfile(work)
+        XCTAssertTrue(try InboxStore.items(profileID: work).isEmpty)
         XCTAssertEqual(reloaded.profiles.count, 1)
         XCTAssertFalse(reloaded.settings.isConfigured)
         XCTAssertTrue(reloaded.conversations.isEmpty)

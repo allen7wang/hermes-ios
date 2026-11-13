@@ -3,9 +3,64 @@ import XCTest
 @testable import Hermes
 
 final class RemoteImageSendTests: XCTestCase {
+    private var inboxDirectory: URL!
+    private var previousInboxURL: URL!
+
+    override func setUp() {
+        super.setUp()
+        previousInboxURL = InboxStore.storageURL
+        inboxDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("remote-image-inbox-\(UUID())", isDirectory: true)
+        InboxStore.storageURL = inboxDirectory.appendingPathComponent("inbox-items.json")
+    }
+
     override func tearDown() {
+        InboxStore.storageURL = previousInboxURL
+        try? FileManager.default.removeItem(at: inboxDirectory)
         RemoteImageURLProtocol.reset()
         super.tearDown()
+    }
+
+    @MainActor
+    func testOpeningSessionAgainReusesActiveRun() async throws {
+        RemoteImageURLProtocol.streamChunks = Self.completedStream(sessionID: "api_reopen", content: "已完成")
+        RemoteImageURLProtocol.messagePage = Data(#"{"session_id":"api_reopen","data":[],"pagination":{"limit":100,"offset":0,"returned":0}}"#.utf8)
+        let model = try makeModel(sessionID: "api_reopen")
+        let session = model.session
+
+        XCTAssertTrue(model.send("继续"))
+        XCTAssertTrue(RemoteConversationModel.open(session: session, client: model.client, draftStore: nil) === model)
+        await Self.waitUntil { !model.isSending }
+        XCTAssertFalse(RemoteConversationModel.open(session: session, client: model.client, draftStore: nil) === model)
+    }
+
+    @MainActor
+    func testInterruptedStreamRemovesApprovalThatServerCannotResume() async throws {
+        RemoteImageURLProtocol.streamChunks = [
+            "event: run.started\ndata: {\"run_id\":\"run_pending\",\"session_id\":\"api_pending\"}\n\n",
+            "event: approval.request\ndata: {\"run_id\":\"run_pending\",\"request_id\":\"request_pending\",\"command\":\"cat ~/notes.txt\",\"description\":\"需要确认\",\"choices\":[\"session\",\"deny\"]}\n\n",
+        ]
+        RemoteImageURLProtocol.messagePage = Data(#"{"session_id":"api_pending","data":[],"pagination":{"limit":100,"offset":0,"returned":0}}"#.utf8)
+        let model = try makeModel(sessionID: "api_pending")
+
+        XCTAssertTrue(model.send("继续"))
+        await Self.waitUntil { !model.isSending }
+        let inbox = try InboxStore.items(profileID: nil)
+        XCTAssertFalse(inbox.contains { $0.kind == .approval })
+        XCTAssertTrue(inbox.contains { $0.kind == .failed })
+    }
+
+    @MainActor
+    func testFailedSendPreservesNewDraftAlongsideUnconfirmedInput() async throws {
+        RemoteImageURLProtocol.streamStatus = 500
+        RemoteImageURLProtocol.messagePage = Data(#"{"session_id":"api_draft","data":[],"pagination":{"limit":100,"offset":0,"returned":0}}"#.utf8)
+        let model = try makeModel(sessionID: "api_draft")
+        XCTAssertTrue(model.send("旧输入"))
+        model.draft = "下一条草稿"
+
+        await Self.waitUntil { !model.isSending }
+        XCTAssertEqual(model.draft, "旧输入\n\n下一条草稿")
+        XCTAssertTrue(model.errorMessage?.contains("检查后再发送") == true)
     }
 
     @MainActor
